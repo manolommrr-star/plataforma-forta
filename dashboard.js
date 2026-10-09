@@ -699,18 +699,25 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
     // compartibles de Android/Chromium (el .xlsx NO), así que sirve de respaldo
     // para "Compartir por WhatsApp" en Android. Se abre en Excel/Sheets/Numbers.
     var csvRows = [];
-    csvRows.push(headers.map(function(h) { return '"' + String(h).replace(/"/g, '""') + '"'; }).join(','));
+    // Delimitador ';' (punto y coma): Excel de escritorio en configuración regional
+    // española/mexicana usa ';' como separador de lista. Con ',' Excel en español NO
+    // parte las columnas y junta toda la fila en una sola celda (el "pierde el formato").
+    // Google Sheets y Numbers detectan el delimitador automáticamente, así que ';'
+    // funciona en los tres. Todo campo de texto va entrecomillado, así que un ';'
+    // interno queda protegido.
+    csvRows.push(headers.map(function(h) { return '"' + String(h).replace(/"/g, '""') + '"'; }).join(';'));
     rows.forEach(function(row) {
         csvRows.push(headers.map(function(h) {
             var v = row[h];
             if (v === '' || v === null || v === undefined) return '';
             if (typeof v === 'number') return String(v);
             return '"' + String(v).replace(/"/g, '""') + '"';
-        }).join(','));
+        }).join(';'));
     });
     // MIME "pelado" text/csv (SIN ;charset): Chromium compara el tipo EXACTO contra su
     // lista blanca de tipos compartibles; con el parámetro charset la comparación falla
-    // y Android no deja compartir. El BOM (\uFEFF) ya hace que Excel abra bien el UTF-8.
+    // y Android no deja compartir. El BOM (\uFEFF) hace que Excel muestre bien los acentos
+    // y respete el ';' como separador de columnas.
     var csvBlob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv' });
 
     // Archivo principal en memoria (Blob). Se prefiere .xlsx para descargar (si la
@@ -718,6 +725,22 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
     var filename, blob;
     if (typeof XLSX !== 'undefined') {
         var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        // Ancho de columnas acorde al contenido (legibilidad al abrir en PC).
+        var widths = headers.map(function(h) {
+            var max = String(h).length;
+            for (var r = 0; r < rows.length; r++) {
+                var val = rows[r][h];
+                if (val === null || val === undefined) continue;
+                var len = String(val).length;
+                if (len > max) max = len;
+            }
+            // 'Secciones (detalle)' puede ser larguísimo: se acota para no desbordar.
+            return { wch: Math.min(Math.max(max + 2, 10), 60) };
+        });
+        ws['!cols'] = widths;
+        // Congela la fila de encabezados y habilita filtro (metadata pura, sin estilos).
+        ws['!freeze'] = { ySplit: '1' };
+        ws['!autofilter'] = { ref: ws['!ref'] };
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
         var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
