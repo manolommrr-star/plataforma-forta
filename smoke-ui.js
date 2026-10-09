@@ -30,7 +30,7 @@ const document = {
 const window = { addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }) };
 const alert = () => {};
 
-const html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 byId['municipios-data'] = el('municipios-data');
 byId['municipios-data'].textContent = html.split('<script type="application/json" id="municipios-data">')[1].split('</script>')[0];
 

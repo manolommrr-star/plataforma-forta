@@ -644,7 +644,7 @@ document.getElementById('detail-overlay').addEventListener('click', function(e) 
     if (e.target === this) closeDetail();
 });
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { closeDetail(); closeCallSheet(); }
+    if (e.key === 'Escape') { closeDetail(); closeCallSheet(); closeExportSheet(); }
 });
 // Menu Marcar / WhatsApp: cerrar al tocar fuera o Cancelar
 try {
@@ -652,6 +652,13 @@ try {
     var _csCancel = document.getElementById('call-sheet-cancel');
     if (_csOv) _csOv.addEventListener('click', function(e) { if (e.target === this) closeCallSheet(); });
     if (_csCancel) _csCancel.addEventListener('click', closeCallSheet);
+} catch(e) {}
+// Menu Exportar: cerrar al tocar fuera o Cancelar
+try {
+    var _exOv = document.getElementById('export-sheet-overlay');
+    var _exCancel = document.getElementById('export-sheet-cancel');
+    if (_exOv) _exOv.addEventListener('click', function(e) { if (e.target === this) closeExportSheet(); });
+    if (_exCancel) _exCancel.addEventListener('click', closeExportSheet);
 } catch(e) {}
 
 // Mostrar mas municipios
@@ -668,7 +675,7 @@ document.getElementById('table-search').addEventListener('input', function(e) {
 });
 
 
-// ===== EXPORTAR EXCEL =====
+// ===== EXPORTAR EXCEL (móvil: descargar o compartir por WhatsApp) =====
 document.getElementById('export-excel-btn').addEventListener('click', function() {
     if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
     var keys = Object.keys(filteredData[0]).filter(function(k) {
@@ -688,11 +695,16 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
         return row;
     });
 
+    // Se construye el archivo en memoria (Blob) para poder descargarlo o
+    // compartirlo; en el teléfono se podrá enviar por WhatsApp.
+    var filename, blob;
     if (typeof XLSX !== 'undefined') {
         var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
-        XLSX.writeFile(wb, 'municipios_filtrados.xlsx');
+        var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        filename = 'municipios_filtrados.xlsx';
+        blob = new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     } else {
         // Respaldo CSV si la librería Excel no cargó (sin conexión al CDN)
         var csvRows = [];
@@ -705,15 +717,61 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
                 return '"' + String(v).replace(/"/g, '""') + '"';
             }).join(','));
         });
-        var blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'municipios_filtrados.csv';
-        a.click();
-        URL.revokeObjectURL(url);
+        filename = 'municipios_filtrados.csv';
+        blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     }
+    openExportSheet(blob, filename, filteredData.length);
 });
+
+// Abre el menú Exportar: descargar o compartir por WhatsApp (móvil)
+function openExportSheet(blob, filename, count) {
+    var ov = document.getElementById('export-sheet-overlay');
+    if (!ov) { downloadBlob(blob, filename); return; }   // respaldo si no hay menú
+    var file = null;
+    try { file = new File([blob], filename, { type: blob.type }); } catch (e) { file = null; }
+
+    // Compartir archivos solo está soportado en móviles (Web Share API nivel 2)
+    var canShareFiles = !!(window.navigator.canShare && window.navigator.share &&
+        file && window.navigator.canShare({ files: [file] }));
+    var shareBtn = document.getElementById('export-share-btn');
+    var hint = document.getElementById('export-share-hint');
+    var num = document.getElementById('export-sheet-num');
+    if (num) num.textContent = count + (count === 1 ? ' municipio listo' : ' municipios listos') + ' · ' + filename;
+    if (shareBtn) shareBtn.style.display = canShareFiles ? '' : 'none';
+    if (hint) hint.style.display = canShareFiles ? 'none' : '';
+
+    var dl = document.getElementById('export-download-btn');
+    if (dl) dl.onclick = function() { closeExportSheet(); downloadBlob(blob, filename); };
+    if (shareBtn) shareBtn.onclick = function() { shareExport(file); };
+
+    ov.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch (e) {}
+}
+function closeExportSheet() {
+    var ov = document.getElementById('export-sheet-overlay');
+    if (ov) ov.classList.remove('open');
+    document.body.style.overflow = '';
+}
+// Envía el archivo por el menú nativo de compartir (WhatsApp, etc.)
+function shareExport(file) {
+    if (window.navigator.share) {
+        window.navigator.share({ files: [file], title: 'Panel FORTA', text: 'Municipios del panel' })
+            .then(closeExportSheet)
+            .catch(function() { /* el usuario canceló: no hacemos nada */ });
+    }
+}
+// Fuerza la descarga del archivo generado
+function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
 
 // ===== INICIALIZACION =====
 // (el document click handler se registra dentro de cada multi-select para evitar

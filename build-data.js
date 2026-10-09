@@ -485,13 +485,13 @@ function main() {
     fs.writeFileSync(outJson, json + '\n', 'utf8');
     console.log('\n✔ data/municipios.json (' + (Buffer.byteLength(json) / 1024).toFixed(1) + ' KB)');
 
-    const htmlPath = path.join(BASE, 'dashboard.html');
+    const htmlPath = path.join(BASE, 'index.html');
     const tag = '<script type="application/json" id="municipios-data">';
     const html = fs.readFileSync(htmlPath, 'utf8');
     const i = html.indexOf(tag), j = html.indexOf('</script>', i);
-    if (i < 0 || j < 0) throw new Error('no se encontró el bloque JSON embebido en dashboard.html');
+    if (i < 0 || j < 0) throw new Error('no se encontró el bloque JSON embebido en index.html');
     fs.writeFileSync(htmlPath, html.slice(0, i + tag.length) + '\n' + json + '\n        ' + html.slice(j), 'utf8');
-    console.log('✔ dashboard.html: bloque embebido reemplazado');
+    console.log('✔ index.html: bloque embebido reemplazado');
     console.log('\nSiguiente paso: node verify.js');
 }
 

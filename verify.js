@@ -14,9 +14,9 @@ const ok = (msg) => console.log('  OK  ' + msg);
 const warn = (msg) => { warnings++; console.log(' AVISO ' + msg); };
 const fail = (msg) => { failures++; console.log(' FAIL ' + msg); };
 
-// ---------- 1. dashboard.html ----------
-console.log('\n[1] dashboard.html');
-const html = fs.readFileSync(path.join(BASE, 'dashboard.html'), 'utf8');
+// ---------- 1. index.html ----------
+console.log('\n[1] index.html');
+const html = fs.readFileSync(path.join(BASE, 'index.html'), 'utf8');
 
 const startTag = '<script type="application/json" id="municipios-data">';
 const i = html.indexOf(startTag);
