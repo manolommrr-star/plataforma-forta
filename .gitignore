@@ -1,0 +1,14 @@
+# Excels fuente (contienen datos sensibles: telefonos). No se suben.
+# Los datos ya van generados en data/municipios.json + dashboard.html
+*.xlsx
+~$*.xlsx
+*.xls
+
+# Temporales de Office / sistema
+~$*
+Thumbs.db
+.DS_Store
+
+# Logs y temporales de node
+*.log
+node_modules/
