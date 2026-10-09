@@ -1,5 +1,5 @@
 // build-data.js — Regenera data/municipios.json y el bloque JSON embebido en
-// dashboard.html a partir del Excel del Panel de Fortalecimiento Interno.
+// index.html a partir del Excel del Panel de Fortalecimiento Interno.
 //
 // SIN DEPENDENCIAS: lee el .xlsx (que es un ZIP) con el zlib de Node y parsea el
 // XML de la hoja directamente. Uso:

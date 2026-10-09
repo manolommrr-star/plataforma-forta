@@ -11,7 +11,7 @@ automáticamente el `Panel*.xlsx` **más reciente** de la carpeta.
 | `index.html` | Panel autocontenido: CSS + HTML + los 212 registros embebidos como JSON. Se abre con doble clic, sin servidor. Es la página que publica GitHub Pages. |
 | `dashboard.js` | Filtros, búsqueda global, tarjetas, vista de detalle y exportación (descargar o compartir el Excel/CSV por WhatsApp en el teléfono). |
 | `data/municipios.json` | Datos (36 campos del Excel + `metricas`/`etiquetas`/`metadata` heredados). |
-| `build-data.js` | **Conversor Excel → JSON.** Lee el `.xlsx` sin dependencias (ZIP + `zlib`) y actualiza `data/municipios.json` y el bloque JSON de `dashboard.html`. Por defecto toma el `Panel*.xlsx` **más reciente** de la carpeta. |
+| `build-data.js` | **Conversor Excel → JSON.** Lee el `.xlsx` sin dependencias (ZIP + `zlib`) y actualiza `data/municipios.json` y el bloque JSON de `index.html`. Por defecto toma el `Panel*.xlsx` **más reciente** de la carpeta. |
 | `verify.js` | Verificación de integridad (5 secciones). |
 | `smoke-ui.js` | Prueba de renderizado: ejecuta `dashboard.js` con un DOM simulado. |
 | `inspect-xlsx.js` | **Radiografía de un Excel nuevo**: hojas que trae, columna por columna (título real, campo del JSON, filas con dato, formato, valor descartado) y diferencias contra `data/municipios.json`. Útil cada vez que llega una versión nueva del panel. |
