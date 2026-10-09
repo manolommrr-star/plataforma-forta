@@ -708,7 +708,10 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
             return '"' + String(v).replace(/"/g, '""') + '"';
         }).join(','));
     });
-    var csvBlob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    // MIME "pelado" text/csv (SIN ;charset): Chromium compara el tipo EXACTO contra su
+    // lista blanca de tipos compartibles; con el parámetro charset la comparación falla
+    // y Android no deja compartir. El BOM (\uFEFF) ya hace que Excel abra bien el UTF-8.
+    var csvBlob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv' });
 
     // Archivo principal en memoria (Blob). Se prefiere .xlsx para descargar (si la
     // librería cargó); si no hay conexión al CDN, el CSV también descarga bien.
@@ -731,29 +734,66 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
 function openExportSheet(blob, filename, count, csvBlob) {
     var ov = document.getElementById('export-sheet-overlay');
     if (!ov) { downloadBlob(blob, filename); return; }   // respaldo si no hay menú
-    var file = null;
-    try { file = new File([blob], filename, { type: blob.type }); } catch (e) { file = null; }
-    var csvFile = null;
-    try { csvFile = new File([csvBlob], 'municipios_filtrados.csv', { type: 'text/csv;charset=utf-8;' }); } catch (e) { csvFile = null; }
+    // Detectamos el sistema para los mensajes (NO para decidir si se puede: eso
+    // lo decide navigator.canShare con cada archivo en concreto).
+    var ua = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua);
 
-    // Mostramos "Compartir" si se puede compartir AL MENOS el CSV (text/csv está
-    // permitido en iPhone y Android). NO confiamos en canShare() para el .xlsx:
-    // en Chromium devuelve true para cualquier archivo y luego share() lo rechaza.
-    var shareOk = false;
+    var xlsxFile = null, csvFile = null;
+    try { xlsxFile = new File([blob], filename, { type: blob.type }); } catch (e) { xlsxFile = null; }
     try {
-        shareOk = !!(window.navigator && window.navigator.share && window.navigator.canShare &&
-            csvFile && window.navigator.canShare({ files: [csvFile] }));
-    } catch (e) { shareOk = false; }
-    var shareBtn = document.getElementById('export-share-btn');
+        if (csvBlob) {
+            var csvName = filename.replace(/\.xlsx$/i, '') + '.csv';
+            // Tipo exacto text/csv para que Chromium lo acepte en su lista blanca.
+            csvFile = new File([csvBlob], csvName, { type: 'text/csv' });
+        }
+    } catch (e) { csvFile = null; }
+
+    function canShare(f) {
+        try { return !!(window.navigator.share && f && window.navigator.canShare && window.navigator.canShare({ files: [f] })); }
+        catch (e) { return false; }
+    }
+    var xOk = canShare(xlsxFile);   // iPhone: sí · Android: no (.xlsx fuera de la lista blanca)
+    var cOk = canShare(csvFile);    // iPhone y Android: sí (text/csv está permitido)
+
+    var xBtn = document.getElementById('export-share-xlsx-btn');
+    var cBtn = document.getElementById('export-share-csv-btn');
     var hint = document.getElementById('export-share-hint');
     var num = document.getElementById('export-sheet-num');
     if (num) num.textContent = count + (count === 1 ? ' municipio listo' : ' municipios listos') + ' · ' + filename;
-    if (shareBtn) shareBtn.style.display = shareOk ? '' : 'none';
-    if (hint) hint.style.display = shareOk ? 'none' : '';
+
+    // Cada botón de compartir solo aparece si ESE formato concreto se puede enviar.
+    if (xBtn) {
+        xBtn.style.display = xOk ? '' : 'none';
+        xBtn.onclick = function() { shareExport(xlsxFile, csvFile); };
+        var xs = document.getElementById('export-xlsx-sub');
+        if (xs) xs.textContent = isIOS ? 'Recomendado en iPhone · formato original del panel'
+                                       : 'Formato original · en Android puede no estar disponible';
+    }
+    if (cBtn) {
+        cBtn.style.display = cOk ? '' : 'none';
+        cBtn.onclick = function() { shareExport(csvFile, null); };
+        var cs = document.getElementById('export-csv-sub');
+        if (cs) cs.textContent = isAndroid ? 'Recomendado en Android · abre en Excel, Sheets o Numbers'
+                                           : 'Compatible con WhatsApp en cualquier teléfono';
+    }
+
+    // Aviso según lo que el navegador permita.
+    if (hint) {
+        if (!xOk && !cOk) {
+            hint.style.display = '';
+            hint.textContent = 'Tu navegador no permite compartir archivos desde la web. Usa "Descargar" y adjunta el archivo desde WhatsApp.';
+        } else if (isAndroid && !xOk) {
+            hint.style.display = '';
+            hint.textContent = 'En Android, WhatsApp recibe el CSV (se abre igual en Excel). El Excel (.xlsx) solo se puede Descargar.';
+        } else {
+            hint.style.display = 'none';
+        }
+    }
 
     var dl = document.getElementById('export-download-btn');
     if (dl) dl.onclick = function() { closeExportSheet(); downloadBlob(blob, filename); };
-    if (shareBtn) shareBtn.onclick = function() { shareExport(file, csvFile); };
 
     ov.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -764,33 +804,29 @@ function closeExportSheet() {
     if (ov) ov.classList.remove('open');
     document.body.style.overflow = '';
 }
-// Envía el archivo por el menú nativo de compartir (WhatsApp, etc.).
-// En Android/Chromium el .xlsx NO está en la lista blanca de tipos compartibles,
-// así que share() lo rechaza (NotAllowedError). En iPhone sí funciona el .xlsx.
-// Estrategia: si canShare no acepta el .xlsx, compartimos el .csv (text/csv, que
-// sí se puede compartir en Android y se abre en Excel/Sheets/Numbers).
-function shareExport(file, csvFile) {
-    if (!window.navigator.share) return;
-
-    var chosen = file;
-    if (window.navigator.canShare && csvFile) {
-        try {
-            if (!window.navigator.canShare({ files: [file] }) &&
-                window.navigator.canShare({ files: [csvFile] })) {
-                chosen = csvFile;   // Android: compartir CSV en vez de xlsx
-            }
-        } catch (e) { /* si falla la comprobación, seguimos con el original */ }
+// Comparte un archivo por el menú nativo (WhatsApp, etc.). Si el sistema rechaza
+// el tipo (Android/Chromium bloquea .xlsx), descarga el archivo como respaldo
+// para que el usuario lo adjunte a mano desde WhatsApp.
+function shareExport(file, fallbackFile) {
+    if (!window.navigator.share) {
+        if (file) downloadBlob(file, file.name);
+        return;
     }
-
-    function doShare(f, fallback) {
+    function doShare(f, fb) {
         return window.navigator.share({ files: [f], title: 'Panel FORTA', text: 'Municipios del panel' })
-            .then(closeExportSheet)
+            .then(function() { closeExportSheet(); })
             .catch(function(err) {
-                if (err && err.name === 'AbortError') return;   // cancelado por el usuario
-                if (fallback) { doShare(fallback, null); }        // reintenta con CSV (Android)
+                if (err && err.name === 'AbortError') return;   // el usuario canceló
+                if (fb) { doShare(fb, null); }                  // reintenta con el otro formato
+                else {
+                    // No se pudo compartir: descargamos y avisamos.
+                    closeExportSheet();
+                    downloadBlob(file, file.name);
+                    alert('No se pudo abrir el menú para compartir en este navegador.\n\nSe descargó el archivo "' + file.name + '".\nÁbrelo y adjúntalo desde WhatsApp.');
+                }
             });
     }
-    doShare(chosen, (chosen !== csvFile ? csvFile : null));
+    doShare(file, fallbackFile);
 }
 // Fuerza la descarga del archivo generado
 function downloadBlob(blob, filename) {
