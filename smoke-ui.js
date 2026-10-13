@@ -60,8 +60,9 @@ const d = byId['detail-content'].innerHTML;
 check(d.includes('Organizaci\u00f3n partidista'), 'detalle: seccion Organizacion partidista');
 check(d.includes('Dirigentes del municipio'), 'detalle: seccion Dirigentes del municipio');
 check(!d.includes('Fecha de nacimiento'), 'detalle: fecha de nacimiento del secretario eliminada del dashboard');
+check(d.indexOf('Localidades') >= 0 && d.indexOf('Localidades') < d.indexOf('Estructura Electoral'), 'detalle: Localidades va ANTES de Estructura Electoral (prioridad)');
 check(d.indexOf('Estructura Electoral') >= 0 && d.indexOf('Estructura Electoral') < d.indexOf('Organizaci\u00f3n partidista'), 'detalle: Estructura Electoral va ANTES de Organizacion partidista');
-check(d.includes('Resultados electorales'), 'detalle: seccion Resultados electorales');
+check(!d.includes('Resultados electorales'), 'detalle: seccion Resultados electorales ELIMINADA (la cubren las graficas de votos por partido)');
 check(d.includes('Representaci\u00f3n del partido'), 'detalle: seccion Representacion del partido');
 check(d.includes('Coordinador de zona'), 'detalle: Coordinador de zona');
 check(d.includes('Secretario general'), 'detalle: Secretario general');
@@ -79,9 +80,8 @@ check(porCandidato.length >= 1 &&
       porCandidato.some(m => (m.candidatos_pan_2025 || '').includes('APODACA ZAVALETA')),
     'busqueda global: encuentra el municipio por el nombre del candidato (' +
     porCandidato.length + ')');
-check(/% 2024 \(locales\)[\s\S]{0,120}17\.13%/.test(d), 'detalle: % 2024 locales con % real (17.13%)');
-check(/% 2025[\s\S]{0,120}0\.39%/.test(d), 'detalle: % 2025 = 0.39% (el 0.3927 del Excel es 0.39%, no 39%)');
-check(!/% 2025[\s\S]{0,120}39\.27%/.test(d), 'detalle: % 2025 NO se infla x100 (no aparece 39.27%)');
+check(!d.includes('% 2024 (locales)') && !d.includes('% 2024 (federales)') && !d.includes('% 2025</div>'),
+    'detalle: los %/votos del Panel ya no se listan (los muestra la grafica por partido)');
 check(d.includes('Vigencia de la estructura'), 'detalle: Vigencia');
 
   // Gráficas de votos por partido (SEE): una gráfica de barras por votación.

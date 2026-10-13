@@ -397,15 +397,6 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   position:relative;
   overflow:hidden;
 }
-.muni-card::after{
-  content:"";
-  position:absolute;
-  right:-30px;top:-30px;
-  width:90px;height:90px;
-  border-radius:50%;
-  background:radial-gradient(circle,rgba(0,63,135,.06),transparent 70%);
-  pointer-events:none;
-}
 .muni-card:hover{
   border-color:var(--accent);
   border-left-width:6px;
@@ -604,26 +595,36 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 .detail-item .dt-value.big{font-size:18px;color:var(--accent)}
 .detail-item .dt-value.dim{color:var(--text-muted);font-weight:400}
 
-/* Localidades: desplegable, ocultas hasta hacer clic (sin numeracion) */
+/* Localidades: boton-desplegable, ocultas hasta hacer clic (sin numeracion) */
 .loc-details details{width:100%}
-.loc-details summary{
+.loc-details summary.loc-toggle{
   cursor:pointer;
   list-style:none;
   display:flex;
   align-items:center;
-  gap:6px;
-  margin-bottom:0;
-}
-.loc-details summary::-webkit-details-marker{display:none}
-.loc-details summary::after{
-  content:'▾';
-  margin-left:auto;
+  gap:8px;
+  width:100%;
+  padding:9px 12px;
+  background:var(--accent-light);
+  border:1px solid var(--accent);
+  border-radius:var(--radius-sm);
   font-size:12px;
+  font-weight:700;
   color:var(--accent);
   transition:var(--transition);
 }
-.loc-details[open] summary{margin-bottom:8px}
-.loc-details[open] summary::after{transform:rotate(180deg)}
+.loc-details summary.loc-toggle:hover{background:#dce9fb}
+.loc-details summary::-webkit-details-marker{display:none}
+.loc-details summary.loc-toggle > i{width:15px;height:15px}
+.loc-details summary.loc-toggle::after{
+  content:'▾';
+  margin-left:auto;
+  font-size:14px;
+  color:var(--accent);
+  transition:var(--transition);
+}
+.loc-details[open] summary.loc-toggle{margin-bottom:10px;border-bottom-left-radius:0;border-bottom-right-radius:0}
+.loc-details[open] summary.loc-toggle::after{transform:rotate(180deg)}
 .loc-details .loc-count{
   background:var(--accent);
   color:#fff;
@@ -668,24 +669,54 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 }
 .chart-bars-legend .bl-item b{color:var(--text-secondary);font-weight:800}
 
-/* ---------- DETALLE REORGANIZADO: hero + contactos + graficas ---------- */
+/* ---------- HERO INSTITUCIONAL: cinta tricolor + titulo + chips ---------- */
 .detail-hero{
-  background:linear-gradient(135deg,#003f87 0%,#0c4a9c 60%,#016fb9 100%);
+  position:relative;
+  background:linear-gradient(135deg,#00265c 0%,#003f87 55%,#0c4a9c 100%);
   color:#fff;
   border-radius:var(--radius);
-  padding:16px 16px 14px;
+  padding:0;
   margin:-4px 0 16px;
   box-shadow:var(--shadow-lg);
+  overflow:hidden;
 }
-.detail-hero .detail-title{color:#fff;font-size:24px;margin:0 0 4px;}
-.detail-hero .detail-sub{color:rgba(255,255,255,.85);margin:0 0 10px;font-size:12px;}
-.detail-hero-chips{display:flex;flex-wrap:wrap;gap:6px;}
+/* cinta decorativa superior (tricolor institucional PAN: azul/blanco/rojo suave) */
+.detail-hero-bar{
+  display:flex;height:5px;width:100%;
+}
+.detail-hero-bar::before,
+.detail-hero-bar::after{content:"";flex:1;}
+.detail-hero-bar::before{background:#fff;}
+.detail-hero-bar::after{background:linear-gradient(90deg,#003f87 60%,#d32f3f 100%);}
+.detail-hero-main{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 16px 14px;
+}
+.detail-hero-txt{flex:1 1 auto;min-width:0;}
+.detail-eyebrow{
+  font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:1.4px;color:rgba(255,255,255,.72);
+  margin-bottom:5px;
+}
+.detail-hero .detail-title{color:#fff;font-size:23px;font-weight:800;margin:0 0 3px;line-height:1.15;letter-spacing:.2px;}
+.detail-hero .detail-sub{color:rgba(255,255,255,.85);margin:0;font-size:12px;font-weight:600;}
+.detail-hero-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px;}
 .detail-hero-chips .hero-chip{
-  background:rgba(255,255,255,.16);
-  border:1px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.32);
   color:#fff;font-size:11px;font-weight:700;
   padding:4px 10px;border-radius:999px;
 }
+/* footer institucional de la ficha */
+.detail-footer{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:18px;padding-top:12px;
+  border-top:1px solid var(--border);
+  font-size:11px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.6px;
+}
+.detail-footer-sep{color:var(--accent);}
+
 .contact-list{display:flex;flex-direction:column;gap:2px;}
 .contact-row{
   display:flex;align-items:center;gap:10px;

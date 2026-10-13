@@ -451,7 +451,7 @@ function detailLocalidades(detalle) {
     });
     var out = '<div class="detail-item full loc-details">';
     out += '<details>';
-    out += '<summary class="dt-label">Localidades <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<summary class="loc-toggle"><i data-lucide="map-pin"></i><span class="loc-toggle__t">Localidades</span> <span class="loc-count">' + nombres.length + '</span></summary>';
     out += '<div class="loc-list">';
     nombres.forEach(function(n) { out += '<span class="loc-pill">' + escapeHtml(n) + '</span>'; });
     out += '</div></details></div>';
@@ -496,8 +496,14 @@ function openDetail(id) {
 
     var html = '';
     html += '<div class="detail-hero">';
+    html += '<div class="detail-hero-bar"></div>';
+    html += '<div class="detail-hero-main">';
+    html += '<div class="detail-hero-txt">';
+    html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
     html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
-    html += '<div class="detail-sub">Municipio ' + m['numero de municipio'] + (est ? ' · ' + escapeHtml(est) : '') + '</div>';
+    html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
+    html += '</div>';
+    html += '</div>';
     html += '<div class="detail-hero-chips">';
     if (m.zona != null) html += '<span class="hero-chip">Zona ' + escapeHtml(String(m.zona)) + '</span>';
     if (est) html += '<span class="hero-chip">' + escapeHtml(estatusShort(est)) + '</span>';
@@ -562,8 +568,14 @@ function openDetail(id) {
         html += '</div></div>';
     });
     html += '</div></div>';
-    // Estructura Electoral: listado nominal, secciones, casillas y localidades.
-    // (Sube aqui a peticion: ahora va ANTES de Organizacion partidista.)
+    // Localidades del municipio: seccion PROPIA y con PRIORIDAD sobre
+    // Estructura Electoral (a peticion). Antes venia al final, dentro de
+    // Estructura Electoral.
+    html += '<div class="detail-section"><h3>Localidades</h3>' + detailLocalidades(m.secciones_detalle) + '</div>';
+
+    // Estructura Electoral: listado nominal, secciones, casillas, rutas, ediles
+    // y distritos. (Sube aqui a peticion: ahora va ANTES de Organizacion
+    // partidista, y Localidades va antes que ella.)
     html += '<div class="detail-section"><h3>Estructura Electoral</h3>';
     html += '<div class="detail-grid">';
     html += detailItem('Listado Nominal', formatNum(m.listado_nominal), 'big');
@@ -574,7 +586,6 @@ function openDetail(id) {
     html += detailItem('Militantes', m.militantes != null ? formatNum(m.militantes) : '—', m.militantes != null ? 'big' : 'dim');
     html += detailItem('Distrito Local', m.distrito_local || '', '', true);
     html += detailItem('Distrito Federal', m.distrito_federal || '', '', true);
-    html += detailLocalidades(m.secciones_detalle);
     html += '</div></div>';
 
     // La fecha de nacimiento del secretario se quito del dashboard a peticion
@@ -591,15 +602,10 @@ function openDetail(id) {
     html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
     html += '</div></div>';
 
-    // Resultados electorales (del Excel): 2024 locales/federales y 2025 alcaldes
-    html += '<div class="detail-section"><h3>Resultados electorales</h3><div class="detail-grid">';
-    html += detailItem('Votos 2024 (locales)', m.votos_2024_locales != null ? formatNum(m.votos_2024_locales) : '—', m.votos_2024_locales != null ? 'big' : 'dim');
-    html += detailItem('% 2024 (locales)', formatPct(m.pct_2024_locales), m.pct_2024_locales != null ? 'big' : 'dim');
-    html += detailItem('Votos 2024 (federales)', m.votos_2024_federales != null ? formatNum(m.votos_2024_federales) : '—', m.votos_2024_federales != null ? 'big' : 'dim');
-    html += detailItem('% 2024 (federales)', formatPct(m.pct_2024_federales), m.pct_2024_federales != null ? 'big' : 'dim');
-    html += detailItem('Votos 2025 (alcaldes)', m.votos_2025_alcaldes != null ? formatNum(m.votos_2025_alcaldes) : '—', m.votos_2025_alcaldes != null ? 'big' : 'dim');
-    html += detailItem('% 2025', formatPct(m.pct_2025), m.pct_2025 != null ? 'big' : 'dim');
-    html += '</div></div>';
+    // La seccion "Resultados electorales" (votos/% del Excel del Panel) se quito
+    // del detalle a peticion: esa informacion ya la muestran las graficas de
+    // "Votos por partido" (desde los SEE). Los campos votos_2024_* / pct_* siguen
+    // intactos en el JSON y en la exportacion; aqui solo no se pintan.
 
     // Representación del partido (del Excel)
     var ppFed = m.pp_diputado_federal || '';
@@ -649,6 +655,12 @@ function openDetail(id) {
         });
         html += '</div></div>';
     }
+
+    html += '<div class="detail-footer">' +
+        '<span>Panel de Fortalecimiento Interno</span>' +
+        '<span class="detail-footer-sep">·</span>' +
+        '<span>Municipio ' + m['numero de municipio'] + ' de 212</span>' +
+        '</div>';
 
     content.innerHTML = html;
     document.getElementById('detail-overlay').classList.add('open');
