@@ -84,12 +84,14 @@ check(!d.includes('% 2024 (locales)') && !d.includes('% 2024 (federales)') && !d
     'detalle: los %/votos del Panel ya no se listan (los muestra la grafica por partido)');
 check(d.includes('Vigencia de la estructura'), 'detalle: Vigencia');
 
-  // Gráficas de votos por partido (SEE): una gráfica de barras por votación.
-  // % de cada partido sobre el total de votos A PARTIDOS del municipio (las
-  // barras suman ~100%). No se muestran coaliciones, independientes ni nulos.
+  // Gráficas de votos por partido (SEE): un pastel por votación, una rebanada
+  // por partido en su color. El total del pastel es la suma de votos A PARTIDOS
+  // del municipio (las rebanadas suman ~100%). No se muestran coaliciones,
+  // independientes ni nulos.
   check(d.includes('Votos por partido'), 'graficas: seccion "Votos por partido"');
-  check(d.includes('bars-0-1') && d.includes('bars-1-1') && d.includes('bars-2-1'),
-      'graficas: un canvas de barras por votacion (bars-0-1 / bars-1-1 / bars-2-1)');
+  check(d.includes('pie-0-1') && d.includes('pie-1-1') && d.includes('pie-2-1'),
+      'graficas: un pastel por votacion (pie-0-1 / pie-1-1 / pie-2-1)');
+  check(d.includes('chart-pie'), 'graficas: canvas con clase chart-pie (pastel, no barras)');
   check(d.includes('votos a partidos'), 'graficas: leyenda con "votos a partidos" (denominador del %)');
   ['PAN', 'PRI', 'PRD', 'PVEM', 'PT', 'MC', 'MORENA'].forEach(p =>
       check(d.includes('>' + p + ' <b>'), 'graficas: leyenda incluye ' + p + ' con su %'));

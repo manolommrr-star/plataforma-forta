@@ -632,80 +632,141 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   padding:1px 7px;
   font-size:10px;
 }
-.loc-details .loc-list{display:flex;flex-wrap:wrap;gap:6px}
+.loc-details .loc-list{columns:2;column-gap:16px}
 .loc-details .loc-pill{
-  background:var(--accent-light);
-  color:var(--accent);
-  border:1px solid var(--accent);
-  padding:4px 10px;
-  border-radius:999px;
+  display:flex;align-items:baseline;gap:6px;
+  break-inside:avoid;
+  padding:2px 0;
   font-size:11px;
-  font-weight:600;
-  line-height:1.2;
+  color:var(--text-primary);
+  font-weight:500;
+  line-height:1.4;
 }
+.loc-details .loc-pill .loc-num{
+  color:var(--accent);
+  font-weight:800;
+  font-size:10px;
+  min-width:16px;
+  text-align:right;
+  flex-shrink:0;
+}
+@media(min-width:560px){.loc-details .loc-list{columns:3}}
+@media(min-width:820px){.loc-details .loc-list{columns:4}}
 
-/* Barras por partido: una tarjeta por votacion con su grafica y leyenda */
-.bars-hero{display:flex;flex-direction:column;gap:10px;}
-.chart-bars-card{
+/* Localidades DENTRO del hero institucional (fondo azul): acceso rapido */
+.loc-hero{margin-top:12px}
+.loc-hero summary.loc-toggle{
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.42);
+  color:#fff;
+}
+.loc-hero summary.loc-toggle:hover{background:rgba(255,255,255,.24)}
+.loc-hero summary.loc-toggle::after{color:#fff}
+.loc-hero .loc-count{background:#fff;color:var(--accent)}
+.loc-hero .loc-list .loc-pill{
+  background:transparent;
+  color:#fff;
+  border:0;
+  padding:2px 0;
+  font-size:12px;
+  font-weight:500;
+}
+.loc-hero .loc-list .loc-pill .loc-num{color:rgba(255,255,255,.35)}
+.loc-hero .loc-list .loc-pill:hover{color:#fff}
+
+/* Pasteles por partido: una tarjeta por votacion con su grafica y leyenda */
+.pie-hero{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;justify-content:center;}
+.chart-pie-card{
+  flex:1 1 160px;min-width:0;
   background:#fff;border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:10px 12px;
+  border-radius:var(--radius-sm);padding:7px 9px;text-align:center;
 }
-.chart-bars-label{
-  font-size:12px;font-weight:800;color:var(--accent);
-  line-height:1.3;margin-bottom:6px;
+.chart-pie-label{
+  font-size:11px;font-weight:800;color:var(--accent);
+  line-height:1.25;margin-bottom:4px;
 }
-.chart-bars-label br{font-size:10px;color:var(--text-secondary);font-weight:600}
-.chart-bars{width:100%;height:150px;display:block;}
-.chart-bars-legend{
-  display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px;
+.chart-pie-label br{font-size:9px;color:var(--text-secondary);font-weight:600}
+.chart-pie{width:110px;height:110px;display:block;margin:0 auto;}
+.chart-pie-legend{
+  display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:6px;justify-content:center;
 }
-.chart-bars-legend .bl-item{
-  display:inline-flex;align-items:center;gap:5px;
-  font-size:11px;font-weight:700;color:var(--text-primary);
+.chart-pie-legend .bl-item{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-weight:700;color:var(--text-primary);
 }
-.chart-bars-legend .bl-item::before{
-  content:"";width:9px;height:9px;border-radius:2px;
+.chart-pie-legend .bl-item::before{
+  content:"";width:8px;height:8px;border-radius:2px;
   background:var(--c,#7a8aa8);flex-shrink:0;
 }
-.chart-bars-legend .bl-item b{color:var(--text-secondary);font-weight:800}
+.chart-pie-legend .bl-item b{color:var(--text-secondary);font-weight:800}
 
-/* ---------- HERO INSTITUCIONAL: cinta tricolor + titulo + chips ---------- */
+/* ---------- FICHA MUNICIPAL: contenido compacto ---------- */
+.detail-section{margin-top:12px;display:flex;flex-direction:column;}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+@media(min-width:640px){.detail-grid{grid-template-columns:1fr 1fr 1fr 1fr}}
+.detail-item{
+  display:flex;align-items:baseline;gap:8px;
+  padding:4px 0;
+  border-bottom:1px solid var(--border-light);
+}
+.detail-item:last-child{border-bottom:0}
+.detail-item .d-label{
+  font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text-muted);flex-shrink:0;min-width:92px;
+}
+.detail-item .d-val{font-size:12px;font-weight:600;color:var(--text-primary);word-break:break-word;flex:1 1 auto;min-width:0}
+.detail-item .d-val.dim{color:var(--text-secondary);font-weight:500}
+.detail-item .d-val.big{font-size:14px;font-weight:800;color:var(--accent)}
+/* Fila compacta: dos etiquetas + dos valores en una misma fila (Estatus y Vigencia) */
+.detail-item.tight{display:flex;gap:10px}
+.detail-item.tight .d-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);flex-shrink:0;min-width:88px}
+.detail-item.tight .d-label:first-child{font-weight:600;color:var(--text-primary)}
+.detail-item.tight .d-val{font-size:12px;font-weight:700;color:var(--text-primary)}
+
+/* Boton de mapa junto al nombre (vive dentro del hero azul): abre Google Maps */
+.detail-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.detail-map-btn{
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:28px;height:28px;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.42);
+  color:#fff;border-radius:999px;
+  cursor:pointer;transition:var(--transition);font-family:inherit;
+}
+.detail-map-btn:hover{background:rgba(255,255,255,.28);}
+/* El icono va como SVG inline (no depende de createIcons). Trae width/height
+   y stroke=#fff propios, asi que se ve aunque el CSS falle; aqui solo centramos. */
+.detail-map-btn .map-pin-svg{display:block;flex-shrink:0;}
+
+/* ---------- HERO INSTITUCIONAL: titulo + chips ---------- */
 .detail-hero{
   position:relative;
-  background:linear-gradient(135deg,#00265c 0%,#003f87 55%,#0c4a9c 100%);
+  background:#003f87;
   color:#fff;
   border-radius:var(--radius);
   padding:0;
-  margin:-4px 0 16px;
+  margin:-4px 0 12px;
   box-shadow:var(--shadow-lg);
   overflow:hidden;
 }
-/* cinta decorativa superior (tricolor institucional PAN: azul/blanco/rojo suave) */
-.detail-hero-bar{
-  display:flex;height:5px;width:100%;
-}
-.detail-hero-bar::before,
-.detail-hero-bar::after{content:"";flex:1;}
-.detail-hero-bar::before{background:#fff;}
-.detail-hero-bar::after{background:linear-gradient(90deg,#003f87 60%,#d32f3f 100%);}
 .detail-hero-main{
-  display:flex;align-items:center;gap:14px;
-  padding:16px 16px 14px;
+  display:flex;align-items:center;gap:12px;
+  padding:13px 16px 12px;
 }
 .detail-hero-txt{flex:1 1 auto;min-width:0;}
 .detail-eyebrow{
-  font-size:10px;font-weight:800;text-transform:uppercase;
+  font-size:9px;font-weight:800;text-transform:uppercase;
   letter-spacing:1.4px;color:rgba(255,255,255,.72);
-  margin-bottom:5px;
+  margin-bottom:4px;
 }
-.detail-hero .detail-title{color:#fff;font-size:23px;font-weight:800;margin:0 0 3px;line-height:1.15;letter-spacing:.2px;}
-.detail-hero .detail-sub{color:rgba(255,255,255,.85);margin:0;font-size:12px;font-weight:600;}
-.detail-hero-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px;}
+.detail-hero .detail-title{color:#fff;font-size:22px;font-weight:800;margin:0 0 2px;line-height:1.15;letter-spacing:.2px;}
+.detail-hero .detail-sub{color:rgba(255,255,255,.85);margin:0;font-size:11px;font-weight:600;}
+.detail-hero-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;}
 .detail-hero-chips .hero-chip{
   background:rgba(255,255,255,.14);
   border:1px solid rgba(255,255,255,.32);
-  color:#fff;font-size:11px;font-weight:700;
-  padding:4px 10px;border-radius:999px;
+  color:#fff;font-size:10px;font-weight:700;
+  padding:3px 8px;border-radius:999px;
 }
 /* footer institucional de la ficha */
 .detail-footer{

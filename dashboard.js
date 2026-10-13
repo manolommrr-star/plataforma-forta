@@ -429,7 +429,7 @@ function detailItem(label, value, cls, full) {
 // muestran todas. El valor original (con clave y romano) sigue intacto en
 // secciones_detalle para la busqueda/exportacion; aqui solo se pinta distinto.
 // Se usa <details>/<summary> nativo: se despliega al dar clic sin JS.
-function detailLocalidades(detalle) {
+function detailLocalidades(detalle, enHero) {
     var raw = String(detalle || '').trim();
     if (!raw) return detailItem('Localidades', '', 'dim', true);
     var items = raw.split('|').map(function(t) {
@@ -449,11 +449,11 @@ function detailLocalidades(detalle) {
         if (col[l]) { if (!vistos[l]) { vistos[l] = 1; nombres.push(l); } }
         else { nombres.push(l); }
     });
-    var out = '<div class="detail-item full loc-details">';
+    var out = '<div class="' + (enHero ? 'loc-hero loc-details' : 'detail-item full loc-details') + '">';
     out += '<details>';
     out += '<summary class="loc-toggle"><i data-lucide="map-pin"></i><span class="loc-toggle__t">Localidades</span> <span class="loc-count">' + nombres.length + '</span></summary>';
     out += '<div class="loc-list">';
-    nombres.forEach(function(n) { out += '<span class="loc-pill">' + escapeHtml(n) + '</span>'; });
+    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(n) + '</div>'; });
     out += '</div></details></div>';
     return out;
 }
@@ -496,11 +496,16 @@ function openDetail(id) {
 
     var html = '';
     html += '<div class="detail-hero">';
-    html += '<div class="detail-hero-bar"></div>';
+    // Boton de mapa junto al nombre: abre Google Maps con el municipio en Veracruz.
+    // Usamos la busqueda de Maps (api=1&query=), que no requiere coordenadas.
+    var jsMun = String(m.municipio || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     html += '<div class="detail-hero-main">';
     html += '<div class="detail-hero-txt">';
     html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
+    html += '<div class="detail-title-row">';
     html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
+    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><svg class="map-pin-svg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg></button>';
+    html += '</div>';
     html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
     html += '</div>';
     html += '</div>';
@@ -509,6 +514,39 @@ function openDetail(id) {
     if (est) html += '<span class="hero-chip">' + escapeHtml(estatusShort(est)) + '</span>';
     if (m.distrito_local) html += '<span class="hero-chip">DL: ' + escapeHtml(String(m.distrito_local)) + '</span>';
     if (m.distrito_federal) html += '<span class="hero-chip">DF: ' + escapeHtml(String(m.distrito_federal)) + '</span>';
+    html += '</div>';
+    // Localidades integradas en el hero (arriba de la ficha), como acceso
+    // rapido: el desplegable va dentro del encabezado institucional, no como
+    // seccion suelta en el cuerpo.
+    html += detailLocalidades(m.secciones_detalle, true);
+    html += '</div>';
+
+    // 2) GRAFICAS: un pastel por votacion, una rebanada por partido en su color.
+    //    Van JUSTO TRAS el hero (nombre + estatus), que es lo mas importante,
+    //    a peticion. El % de cada partido es sobre el total de votos A PARTIDOS
+    //    del municipio (sin coaliciones, ni candidatos independientes, ni votos
+    //    nulos). Fuente: SEE. El total del pastel es data.total, no los votos
+    //    oficiales.
+    var vp = m.votos_partidos || {};
+    html += '<div class="detail-section"><h3>Votaciones · Votos por partido</h3>';
+    html += '<div class="chart-hero pie-hero">';
+    ORDEN_VOTACIONES.forEach(function(et, i) {
+        var v = vp[et];
+        var cid = 'pie-' + i + '-' + m['numero de municipio'];
+        html += '<div class="chart-pie-card">';
+        html += '<div class="chart-pie-label">' + et + '<br>' + formatNum(v ? v.total : 0) + ' votos a partidos</div>';
+        html += '<canvas class="chart-pie" id="' + cid + '"></canvas>';
+        html += '<div class="chart-pie-legend">';
+        if (v && v.barras && v.total) {
+            v.barras.slice().sort(function(a, b) { return b.votos - a.votos; }).forEach(function(b) {
+                var col = PARTIDO_COLOR[b.partido] || '#7a8aa8';
+                html += '<span class="bl-item" style="--c:' + col + '">' + escapeHtml(b.partido) + ' <b>' + b.pct.toFixed(1) + '%</b></span>';
+            });
+        } else {
+            html += '<span class="bl-item">Sin datos</span>';
+        }
+        html += '</div></div>';
+    });
     html += '</div></div>';
 
     // Genero legible (el Excel trae "F"/"M")
@@ -544,34 +582,10 @@ function openDetail(id) {
     html += contactRow('Secretario general', m.secretario_general || '', generoLabel(m.secretario_genero), secTel0);
     html += '</div></div>';
 
-    // 3) GRAFICAS: una grafica de barras por partido para cada votacion.
-    //    El % de cada partido es sobre el total de votos A PARTIDOS del municipio
-    //    (sin coaliciones, ni candidatos independientes, ni votos nulos). Fuente: SEE.
-    var vp = m.votos_partidos || {};
-    html += '<div class="detail-section"><h3>Votaciones · Votos por partido</h3>';
-    html += '<div class="chart-hero bars-hero">';
-    ORDEN_VOTACIONES.forEach(function(et, i) {
-        var v = vp[et];
-        var cid = 'bars-' + i + '-' + m['numero de municipio'];
-        html += '<div class="chart-bars-card">';
-        html += '<div class="chart-bars-label">' + et + '<br>' + formatNum(v ? v.total : 0) + ' votos a partidos</div>';
-        html += '<canvas class="chart-bars" id="' + cid + '"></canvas>';
-        html += '<div class="chart-bars-legend">';
-        if (v && v.barras && v.total) {
-            v.barras.slice().sort(function(a, b) { return b.votos - a.votos; }).forEach(function(b) {
-                var col = PARTIDO_COLOR[b.partido] || '#7a8aa8';
-                html += '<span class="bl-item" style="--c:' + col + '">' + escapeHtml(b.partido) + ' <b>' + b.pct.toFixed(1) + '%</b></span>';
-            });
-        } else {
-            html += '<span class="bl-item">Sin datos</span>';
-        }
-        html += '</div></div>';
-    });
-    html += '</div></div>';
-    // Localidades del municipio: seccion PROPIA y con PRIORIDAD sobre
-    // Estructura Electoral (a peticion). Antes venia al final, dentro de
-    // Estructura Electoral.
-    html += '<div class="detail-section"><h3>Localidades</h3>' + detailLocalidades(m.secciones_detalle) + '</div>';
+    // (Las graficas de "Votos por partido" ya se pintan JUSTO TRAS el hero, al
+    // principio de la ficha — ver mas arriba. Aqui habia un segundo bloque
+    // duplicado que reusaba los mismos IDs de canvas pie-i-N y pisaba los
+    // pasteles; se elimino.)
 
     // Estructura Electoral: listado nominal, secciones, casillas, rutas, ediles
     // y distritos. (Sube aqui a peticion: ahora va ANTES de Organizacion
@@ -592,14 +606,14 @@ function openDetail(id) {
     // (dato personal). El valor sigue intacto en secretario_fecha_nacimiento
     // para la exportacion y en data/municipios.json; aqui solo no se pinta.
 
-    // Organización partidista: zona, estatus, vigencia y fuerza territorial
+    // Organización partidista: coordinador, zona, fuerza territorial, estatus y vigencia
     html += '<div class="detail-section"><h3>Organización partidista</h3><div class="detail-grid">';
+    html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
     html += detailItem('Zona', m.zona != null ? m.zona : '', 'big');
-    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim');
     html += detailItem('Soldados', formatNum(m.soldados), 'big');
     html += detailItem('Meta de afiliados', formatNum(m.meta_afiliados), 'big');
+    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim');
     html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim');
-    html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
     html += '</div></div>';
 
     // La seccion "Resultados electorales" (votos/% del Excel del Panel) se quito
@@ -667,16 +681,16 @@ function openDetail(id) {
     document.body.style.overflow = 'hidden';
     try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
-    // Dibujar las 3 graficas de barras por partido (tras tener el canvas en el DOM)
+    // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
     var vp = m.votos_partidos || {};
     ORDEN_VOTACIONES.forEach(function(et, i) {
-        renderDetailBars('bars-' + i + '-' + m['numero de municipio'], vp[et]);
+        renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 }
 
 
 // Orden fijo de las votaciones en el detalle y color de cada partido.
-// Las barras usan el color del partido, asi que aqui vive la paleta.
+// El pastel usa el color del partido, asi que aqui vive la paleta.
 var ORDEN_VOTACIONES = ['2025 alcaldes', '2024 locales', '2024 federales'];
 var PARTIDO_COLOR = {
     'PAN': '#003f87',    // azul PAN
@@ -688,30 +702,31 @@ var PARTIDO_COLOR = {
     'MORENA': '#8c1d40'  // guindo MORENA
 };
 
-// Barras horizontales de una votacion: una barra por partido, ordenada de
-// mayor a menor. El % es sobre el total de votos A PARTIDOS del municipio.
-function renderDetailBars(canvasId, data) {
+// Pastel de una votacion: una rebanada por partido, en el color del partido.
+// El total del pastel es data.total (suma de votos A PARTIDOS del municipio,
+// ya sin coaliciones, ni candidatos independientes, ni votos nulos); Chart.js
+// calcula cada rebanada como votos/total, o sea el mismo % de la leyenda.
+function renderDetailPie(canvasId, data) {
     if (!window.Chart) return;
     var canvas = document.getElementById(canvasId);
     if (!canvas || !data || !data.barras || !data.barras.length) return;
     var barras = data.barras.slice().sort(function(a, b) { return b.votos - a.votos; });
     var ctx = canvas.getContext('2d');
     new Chart(ctx, {
-        type: 'bar',
+        type: 'pie',
         data: {
             labels: barras.map(function(b) { return b.partido; }),
             datasets: [{
                 data: barras.map(function(b) { return b.votos; }),
                 backgroundColor: barras.map(function(b) { return PARTIDO_COLOR[b.partido] || '#7a8aa8'; }),
-                borderRadius: 4,
-                barThickness: 12
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                hoverOffset: 4
             }]
         },
         options: {
-            indexAxis: 'y',
             responsive: false,
             maintainAspectRatio: false,
-            layout: { padding: { right: 8 } },
             plugins: {
                 legend: { display: false },
                 datalabels: { display: false },
@@ -720,20 +735,27 @@ function renderDetailBars(canvasId, data) {
                     callbacks: {
                         label: function(c) {
                             var b = barras[c.dataIndex];
-                            return ' ' + c.parsed.x.toLocaleString('es-MX') + ' votos · ' + b.pct.toFixed(2) + '%';
+                            return ' ' + b.partido + ': ' + b.votos.toLocaleString('es-MX') + ' votos · ' + b.pct.toFixed(2) + '%';
                         }
                     }
-                }
-            },
-            scales: {
-                x: { display: false, grid: { display: false } },
-                y: {
-                    ticks: { font: { size: 10, weight: '700' }, color: '#0b2545' },
-                    grid: { display: false }
                 }
             }
         }
     });
+}
+
+
+// Boton "Ver ubicacion": abre Google Maps con la busqueda del municipio en
+// Veracruz. Usa la API universal de Maps (https://www.google.com/maps/search/?
+// api=1&query=...), que no necesita coordenadas: basta con el nombre del lugar.
+// En movil abre la app si esta instalada; si no, la version web. Se suma
+// ", Veracruz" para desambiguar de municipios homonimos de otros estados.
+function verUbicacion(municipio) {
+    var nombre = (municipio || '').toString().trim();
+    if (!nombre) return;
+    var query = nombre + ', Veracruz, Mexico';
+    var url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+    window.open(url, '_blank', 'noopener');
 }
 
 
