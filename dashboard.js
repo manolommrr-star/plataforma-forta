@@ -612,8 +612,8 @@ function openDetail(id) {
     html += detailItem('Zona', m.zona != null ? m.zona : '', 'big');
     html += detailItem('Soldados', formatNum(m.soldados), 'big');
     html += detailItem('Meta de afiliados', formatNum(m.meta_afiliados), 'big');
-    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim');
-    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim');
+    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim', true);
+    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim', true);
     html += '</div></div>';
 
     // La seccion "Resultados electorales" (votos/% del Excel del Panel) se quito
