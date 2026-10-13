@@ -209,7 +209,7 @@ function applyFilters() {
 function getTableKeys() {
     if (filteredData.length === 0) return [];
     return Object.keys(filteredData[0]).filter(function(k) {
-        return ['metricas', 'etiquetas', 'metadata'].indexOf(k) === -1;
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
     });
 }
 
@@ -416,6 +416,48 @@ function detailItem(label, value, cls, full) {
     '</div>';
 }
 
+// Lista de localidades del municipio como DESPLEGABLE: queda OCULTA hasta que
+// el usuario hace clic (si no, la lista larga alargaba el detalle). Al pintar:
+//   - se quita la clave numerica del PEL ("1. ACAJETE" -> "ACAJETE");
+//   - se quita el numero romano final de seccion (I, II, III, IV) cuando va
+//     suelto ("URSULO GALVAN II" -> "URSULO GALVAN"), respetando el parentesis
+//     ("ZACATE COLORADO II (FRATERNIDAD)" -> "ZACATE COLORADO (FRATERNIDAD)");
+//   - si el romano hacia que la MISMA localidad apareciera dos veces en el
+//     municipio (base + variante), se muestra UNA sola vez (ALAMO TEMAPACHE:
+//     URSULO GALVAN / URSULO GALVAN II -> un URSULO GALVAN).
+// NO se colapsan nombres identicos SIN romano: son localidades distintas y se
+// muestran todas. El valor original (con clave y romano) sigue intacto en
+// secciones_detalle para la busqueda/exportacion; aqui solo se pinta distinto.
+// Se usa <details>/<summary> nativo: se despliega al dar clic sin JS.
+function detailLocalidades(detalle) {
+    var raw = String(detalle || '').trim();
+    if (!raw) return detailItem('Localidades', '', 'dim', true);
+    var items = raw.split('|').map(function(t) {
+        return t.trim().replace(/^\d+\.\s*/, '');   // quita la clave inicial
+    }).filter(Boolean);
+    // quita UN numero romano final suelto (respeta parentesis y fin de cadena)
+    var limpios = items.map(function(n) {
+        return n.replace(/\s+(?:IV|III|II|I)(?=\s*(?:\(|$))/, '').trim();
+    });
+    // un nombre colapsa si alguna de sus entradas perdio el romano (existe la
+    // base Y la variante en este municipio); esas se muestran una sola vez.
+    var col = {};
+    limpios.forEach(function(l, i) { if (items[i] !== l) col[l] = true; });
+    var vistos = {};
+    var nombres = [];
+    limpios.forEach(function(l) {
+        if (col[l]) { if (!vistos[l]) { vistos[l] = 1; nombres.push(l); } }
+        else { nombres.push(l); }
+    });
+    var out = '<div class="detail-item full loc-details">';
+    out += '<details>';
+    out += '<summary class="dt-label">Localidades <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<div class="loc-list">';
+    nombres.forEach(function(n) { out += '<span class="loc-pill">' + escapeHtml(n) + '</span>'; });
+    out += '</div></details></div>';
+    return out;
+}
+
 // Normaliza un telefono para enlaces tel: / WhatsApp (solo digitos, +52 si son 10)
 function phoneTel(phone) {
     if (!phone) return '';
@@ -496,29 +538,32 @@ function openDetail(id) {
     html += contactRow('Secretario general', m.secretario_general || '', generoLabel(m.secretario_genero), secTel0);
     html += '</div></div>';
 
-    // 3) GRAFICAS: 3 pasteles, uno por votacion (2024 loc / 2024 fed / 2025)
-    html += '<div class="detail-section"><h3>Votaciones · Gráficas</h3>';
-    html += '<div class="chart-hero"><div class="chart-donuts-row">';
-    html += '<div class="chart-donut-card"><canvas class="chart-mini" id="pie-loc-' + m['numero de municipio'] + '"></canvas><div class="chart-donut-label">2024 locales<br>' + formatNum(m.votos_2024_locales) + ' votos · ' + formatPct(m.pct_2024_locales) + '</div></div>';
-    html += '<div class="chart-donut-card"><canvas class="chart-mini" id="pie-fed-' + m['numero de municipio'] + '"></canvas><div class="chart-donut-label">2024 federales<br>' + formatNum(m.votos_2024_federales) + ' votos · ' + formatPct(m.pct_2024_federales) + '</div></div>';
-    html += '<div class="chart-donut-card"><canvas class="chart-mini" id="pie-25-' + m['numero de municipio'] + '"></canvas><div class="chart-donut-label">2025 alcaldes<br>' + formatNum(m.votos_2025_alcaldes) + ' votos · ' + formatPct(m.pct_2025) + '</div></div>';
-    html += '</div></div></div>';
-    // Organización partidista: zona, estatus, vigencia y fuerza territorial
-    html += '<div class="detail-section"><h3>Organización partidista</h3><div class="detail-grid">';
-    html += detailItem('Zona', m.zona != null ? m.zona : '', 'big');
-    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim');
-    html += detailItem('Soldados', formatNum(m.soldados), 'big');
-    html += detailItem('Meta de afiliados', formatNum(m.meta_afiliados), 'big');
-    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim');
-    html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
+    // 3) GRAFICAS: una grafica de barras por partido para cada votacion.
+    //    El % de cada partido es sobre el total de votos A PARTIDOS del municipio
+    //    (sin coaliciones, ni candidatos independientes, ni votos nulos). Fuente: SEE.
+    var vp = m.votos_partidos || {};
+    html += '<div class="detail-section"><h3>Votaciones · Votos por partido</h3>';
+    html += '<div class="chart-hero bars-hero">';
+    ORDEN_VOTACIONES.forEach(function(et, i) {
+        var v = vp[et];
+        var cid = 'bars-' + i + '-' + m['numero de municipio'];
+        html += '<div class="chart-bars-card">';
+        html += '<div class="chart-bars-label">' + et + '<br>' + formatNum(v ? v.total : 0) + ' votos a partidos</div>';
+        html += '<canvas class="chart-bars" id="' + cid + '"></canvas>';
+        html += '<div class="chart-bars-legend">';
+        if (v && v.barras && v.total) {
+            v.barras.slice().sort(function(a, b) { return b.votos - a.votos; }).forEach(function(b) {
+                var col = PARTIDO_COLOR[b.partido] || '#7a8aa8';
+                html += '<span class="bl-item" style="--c:' + col + '">' + escapeHtml(b.partido) + ' <b>' + b.pct.toFixed(1) + '%</b></span>';
+            });
+        } else {
+            html += '<span class="bl-item">Sin datos</span>';
+        }
+        html += '</div></div>';
+    });
     html += '</div></div>';
-
-    // Detalle extra de dirigentes: solo lo que NO salio arriba
-    // (nombres, generos y telefonos ya estan en Contactos, no se repiten)
-    html += '<div class="detail-section"><h3>Dirigentes del municipio</h3><div class="detail-grid">';
-    html += detailItem('Fecha de nacimiento (secretario)', m.secretario_fecha_nacimiento || '', m.secretario_fecha_nacimiento ? '' : 'dim', true);
-    html += '</div></div>';
-
+    // Estructura Electoral: listado nominal, secciones, casillas y localidades.
+    // (Sube aqui a peticion: ahora va ANTES de Organizacion partidista.)
     html += '<div class="detail-section"><h3>Estructura Electoral</h3>';
     html += '<div class="detail-grid">';
     html += detailItem('Listado Nominal', formatNum(m.listado_nominal), 'big');
@@ -529,7 +574,21 @@ function openDetail(id) {
     html += detailItem('Militantes', m.militantes != null ? formatNum(m.militantes) : '—', m.militantes != null ? 'big' : 'dim');
     html += detailItem('Distrito Local', m.distrito_local || '', '', true);
     html += detailItem('Distrito Federal', m.distrito_federal || '', '', true);
-    html += detailItem('Secciones (detalle)', m.secciones_detalle || '', m.secciones_detalle ? '' : 'dim', true);
+    html += detailLocalidades(m.secciones_detalle);
+    html += '</div></div>';
+
+    // La fecha de nacimiento del secretario se quito del dashboard a peticion
+    // (dato personal). El valor sigue intacto en secretario_fecha_nacimiento
+    // para la exportacion y en data/municipios.json; aqui solo no se pinta.
+
+    // Organización partidista: zona, estatus, vigencia y fuerza territorial
+    html += '<div class="detail-section"><h3>Organización partidista</h3><div class="detail-grid">';
+    html += detailItem('Zona', m.zona != null ? m.zona : '', 'big');
+    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim');
+    html += detailItem('Soldados', formatNum(m.soldados), 'big');
+    html += detailItem('Meta de afiliados', formatNum(m.meta_afiliados), 'big');
+    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim');
+    html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
     html += '</div></div>';
 
     // Resultados electorales (del Excel): 2024 locales/federales y 2025 alcaldes
@@ -596,44 +655,75 @@ function openDetail(id) {
     document.body.style.overflow = 'hidden';
     try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
-    // Dibujar los 3 pasteles (despues de que el canvas este en el DOM)
-    // Cada uno: votos de esa eleccion vs resto del listado nominal
-    var ln = m.listado_nominal || 0;
-    renderDetailPie('pie-loc-' + m['numero de municipio'], m.votos_2024_locales || 0, ln, '#003f87');
-    renderDetailPie('pie-fed-' + m['numero de municipio'], m.votos_2024_federales || 0, ln, '#016fb9');
-    renderDetailPie('pie-25-' + m['numero de municipio'], m.votos_2025_alcaldes || 0, ln, '#1e7e34');
+    // Dibujar las 3 graficas de barras por partido (tras tener el canvas en el DOM)
+    var vp = m.votos_partidos || {};
+    ORDEN_VOTACIONES.forEach(function(et, i) {
+        renderDetailBars('bars-' + i + '-' + m['numero de municipio'], vp[et]);
+    });
 }
 
-// Pastel de una votacion: votos vs resto del listado nominal
-function renderDetailPie(canvasId, votos, listado, color) {
+
+// Orden fijo de las votaciones en el detalle y color de cada partido.
+// Las barras usan el color del partido, asi que aqui vive la paleta.
+var ORDEN_VOTACIONES = ['2025 alcaldes', '2024 locales', '2024 federales'];
+var PARTIDO_COLOR = {
+    'PAN': '#003f87',    // azul PAN
+    'PRI': '#0e8a4f',    // verde PRI
+    'PRD': '#f2c200',    // amarillo PRD
+    'PVEM': '#8bc34a',   // verde claro PVEM
+    'PT': '#d8362a',     // rojo PT
+    'MC': '#f07d13',     // naranja MC
+    'MORENA': '#8c1d40'  // guindo MORENA
+};
+
+// Barras horizontales de una votacion: una barra por partido, ordenada de
+// mayor a menor. El % es sobre el total de votos A PARTIDOS del municipio.
+function renderDetailBars(canvasId, data) {
     if (!window.Chart) return;
     var canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    var rest = Math.max((listado || 0) - (votos || 0), 0);
+    if (!canvas || !data || !data.barras || !data.barras.length) return;
+    var barras = data.barras.slice().sort(function(a, b) { return b.votos - a.votos; });
     var ctx = canvas.getContext('2d');
     new Chart(ctx, {
-        type: 'pie',
+        type: 'bar',
         data: {
-            labels: ['Votos', 'Resto del listado'],
+            labels: barras.map(function(b) { return b.partido; }),
             datasets: [{
-                data: [votos || 0, rest],
-                backgroundColor: [color, '#e3e8f3'],
-                borderColor: ['#ffffff', '#ccd6e6'],
-                borderWidth: 2,
-                hoverOffset: 4
+                data: barras.map(function(b) { return b.votos; }),
+                backgroundColor: barras.map(function(b) { return PARTIDO_COLOR[b.partido] || '#7a8aa8'; }),
+                borderRadius: 4,
+                barThickness: 12
             }]
         },
         options: {
+            indexAxis: 'y',
             responsive: false,
             maintainAspectRatio: false,
+            layout: { padding: { right: 8 } },
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: true },
-                datalabels: { display: false }
+                datalabels: { display: false },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: function(c) {
+                            var b = barras[c.dataIndex];
+                            return ' ' + c.parsed.x.toLocaleString('es-MX') + ' votos · ' + b.pct.toFixed(2) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { display: false, grid: { display: false } },
+                y: {
+                    ticks: { font: { size: 10, weight: '700' }, color: '#0b2545' },
+                    grid: { display: false }
+                }
             }
         }
     });
 }
+
 
 function closeDetail() {
     document.getElementById('detail-overlay').classList.remove('open');
@@ -679,7 +769,7 @@ document.getElementById('table-search').addEventListener('input', function(e) {
 document.getElementById('export-excel-btn').addEventListener('click', function() {
     if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
     var keys = Object.keys(filteredData[0]).filter(function(k) {
-        return ['metricas', 'etiquetas', 'metadata'].indexOf(k) === -1;
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
     });
     var headers = keys.map(fieldLabel);
     var rows = filteredData.map(function(m) {

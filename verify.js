@@ -102,11 +102,15 @@ if (fileData && embedded) {
   const labelsBlock = (jsSource.match(/var FIELD_LABELS = \{[\s\S]*?\};/) || [''])[0];
   if (!labelsBlock) fail('no se encontró FIELD_LABELS en dashboard.js');
   else {
+    // "votos_partidos" es un dato ESTRUCTURADO (objeto con las barras por
+    // partido de cada votacion) que NO se exporta al CSV/Excel, igual que
+    // metricas/etiquetas/metadata: no necesita etiqueta en FIELD_LABELS.
+    const noExportables = ['metricas', 'etiquetas', 'metadata', 'votos_partidos'];
     const sinEtiqueta = Object.keys(fileData[0])
-      .filter(k => ['metricas', 'etiquetas', 'metadata'].indexOf(k) < 0 && labelsBlock.indexOf("'" + k + "'") < 0);
+      .filter(k => noExportables.indexOf(k) < 0 && labelsBlock.indexOf("'" + k + "'") < 0);
     sinEtiqueta.length
       ? fail('campos sin etiqueta para exportar: ' + sinEtiqueta.join(', '))
-      : ok('los ' + (Object.keys(fileData[0]).length - 3) + ' campos del Excel tienen etiqueta legible para exportar');
+      : ok('los ' + (Object.keys(fileData[0]).length - noExportables.length) + ' campos del Excel tienen etiqueta legible para exportar');
   }
 }
 
@@ -283,9 +287,9 @@ if (!jsSource) {
     if (fileData) {
       // Ningún campo del Excel debe quedar invisible: aparece en la tarjeta,
       // en el detalle, o tiene etiqueta para la exportación.
-      const zonaUI = jsSource.slice(jsSource.indexOf('function renderList'), jsSource.indexOf('function renderDetailPie'));
+      const zonaUI = jsSource.slice(jsSource.indexOf('function renderList'), jsSource.indexOf('function renderDetailBars'));
       const invisibles = Object.keys(fileData[0])
-        .filter(k => ['metricas', 'etiquetas', 'metadata'].indexOf(k) < 0)
+        .filter(k => ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) < 0)
         .filter(k => zonaUI.indexOf(k) < 0 && jsSource.slice(0, jsSource.indexOf('function renderList')).indexOf("'" + k + "'") < 0);
       invisibles.length
         ? fail('campos sin uso en la interfaz: ' + invisibles.join(', '))

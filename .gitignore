@@ -7,6 +7,8 @@
 # Scripts y txt de analisis temporal (no son parte del panel)
 analyze-pct*.js
 pct*.txt
+tmp-*
+
 
 # Temporales de Office / sistema
 ~$*

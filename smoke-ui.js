@@ -59,6 +59,8 @@ api.openDetail(1);
 const d = byId['detail-content'].innerHTML;
 check(d.includes('Organizaci\u00f3n partidista'), 'detalle: seccion Organizacion partidista');
 check(d.includes('Dirigentes del municipio'), 'detalle: seccion Dirigentes del municipio');
+check(!d.includes('Fecha de nacimiento'), 'detalle: fecha de nacimiento del secretario eliminada del dashboard');
+check(d.indexOf('Estructura Electoral') >= 0 && d.indexOf('Estructura Electoral') < d.indexOf('Organizaci\u00f3n partidista'), 'detalle: Estructura Electoral va ANTES de Organizacion partidista');
 check(d.includes('Resultados electorales'), 'detalle: seccion Resultados electorales');
 check(d.includes('Representaci\u00f3n del partido'), 'detalle: seccion Representacion del partido');
 check(d.includes('Coordinador de zona'), 'detalle: Coordinador de zona');
@@ -81,7 +83,69 @@ check(/% 2024 \(locales\)[\s\S]{0,120}17\.13%/.test(d), 'detalle: % 2024 locales
 check(/% 2025[\s\S]{0,120}0\.39%/.test(d), 'detalle: % 2025 = 0.39% (el 0.3927 del Excel es 0.39%, no 39%)');
 check(!/% 2025[\s\S]{0,120}39\.27%/.test(d), 'detalle: % 2025 NO se infla x100 (no aparece 39.27%)');
 check(d.includes('Vigencia de la estructura'), 'detalle: Vigencia');
+
+  // Gráficas de votos por partido (SEE): una gráfica de barras por votación.
+  // % de cada partido sobre el total de votos A PARTIDOS del municipio (las
+  // barras suman ~100%). No se muestran coaliciones, independientes ni nulos.
+  check(d.includes('Votos por partido'), 'graficas: seccion "Votos por partido"');
+  check(d.includes('bars-0-1') && d.includes('bars-1-1') && d.includes('bars-2-1'),
+      'graficas: un canvas de barras por votacion (bars-0-1 / bars-1-1 / bars-2-1)');
+  check(d.includes('votos a partidos'), 'graficas: leyenda con "votos a partidos" (denominador del %)');
+  ['PAN', 'PRI', 'PRD', 'PVEM', 'PT', 'MC', 'MORENA'].forEach(p =>
+      check(d.includes('>' + p + ' <b>'), 'graficas: leyenda incluye ' + p + ' con su %'));
+  // El % es sobre votos a partidos, NO el % del panel (que era sobre el listado
+  // nominal y daba 0.39% al PAN); aqui el PAN tiene un % de votos reales.
+  check(!/PAN <b>0\.39%/.test(d), 'graficas: el % ya NO es el del panel (no aparece PAN 0.39%)');
+  const vp1 = api.allData()[0].votos_partidos;
+  ['2025 alcaldes', '2024 locales', '2024 federales'].forEach(k => {
+      const b = vp1[k].barras;
+      const sumV = b.reduce((a, x) => a + x.votos, 0);
+      const sumP = b.reduce((a, x) => a + x.pct, 0);
+      check(sumV === vp1[k].total, 'graficas: ' + k + ' suma de barras == total a partidos (' + vp1[k].total + ')');
+      check(Math.abs(sumP - 100) < 0.1, 'graficas: ' + k + ' los % suman ~100% (' + sumP.toFixed(2) + '%)');
+  });
+  const coaliciones = ['2025 alcaldes', '2024 locales', '2024 federales']
+      .some(k => vp1[k].barras.some(x => x.partido.indexOf('_') >= 0));
+  check(!coaliciones, 'graficas: ninguna barra es una coalicion (sin nombres con "_")');
+
 check(d.includes('09/10/2028'), 'detalle: fecha de vigencia');
+
+// Localidades: desplegable <details> (ocultas hasta el clic) y SIN la clave
+// numerica del PEL ("1. ACAJETE" no debe pintarse; si "ACAJETE" suelto, si).
+check(/<details[^>]*>[\s\S]*<\/details>/.test(d) && d.includes('loc-details'),
+    'detalle: localidades en desplegable <details> (ocultas hasta el clic)');
+check(d.includes('loc-count">5<'),
+    'detalle: desplegable de localidades con el contador (5 para ACAJETE)');
+check(d.includes('LA JOYA') && !d.includes('1. ACAJETE'),
+    'detalle: localidades SIN numeros (ACAJETE, LA JOYA, ... sin "1. ")');
+
+// Localidades: numero romano de seccion quitado y, SI el romano duplicaba la
+// MISMA localidad en el municipio, se muestra UNA sola vez. Es solo visual: el
+// valor crudo (con romano) sigue intacto en secciones_detalle para busqueda/CSV.
+api.openDetail(8);   // ALAMO TEMAPACHE: URSULO GALVAN(+II) y POTRERO DEL LLANO(+I)
+const d8 = byId['detail-content'].innerHTML;
+check(d8.includes('loc-count">62<'),
+    'detalle: ALAMO pasa de 64 a 62 al colapsar las 2 variantes con romano');
+check((d8.match(/>URSULO GALVAN</g) || []).length === 1,
+    'detalle: URSULO GALVAN se muestra UNA sola vez (sin "II")');
+check((d8.match(/>POTRERO DEL LLANO</g) || []).length === 1,
+    'detalle: POTRERO DEL LLANO se muestra UNA sola vez (sin "I")');
+check(!d8.includes('URSULO GALVAN II') && !d8.includes('POTRERO DEL LLANO I'),
+    'detalle: no quedan sufijos romanos (II / I) en ALAMO');
+api.openDetail(1);   // ACAJETE: EL ENCINAL II -> EL ENCINAL (no hay base local, no colapsa)
+const d1 = byId['detail-content'].innerHTML;
+check(d1.includes('>EL ENCINAL<') && !d1.includes('EL ENCINAL II'),
+    'detalle: EL ENCINAL II se muestra sin el romano (EL ENCINAL)');
+api.openDetail(77);  // IGNACIO DE LA LLAVE: ZACATE COLORADO I/II con parentesis DISTINTO
+const d77 = byId['detail-content'].innerHTML;
+check(d77.includes('ZACATE COLORADO (EL MORAL)') && d77.includes('ZACATE COLORADO (FRATERNIDAD)'),
+    'detalle: ZACATE COLORADO I/II sin romano pero SIN colapsar (parentesis distinto)');
+// nombres identicos SIN romano en el mismo municipio NO deben colapsarse
+const sinColapsar = api.allData().some(m => {
+  const items = String(m.secciones_detalle || '').split('|').map(t => t.trim().replace(/^\d+\.\s*/, '')).filter(Boolean);
+  return items.some((x, i) => items.indexOf(x) !== i && !/\s(?:IV|III|II|I)(?:\s*\(|\s*$)/.test(x));
+});
+check(sinColapsar, 'dato: existen localidades con nombre identico SIN romano (no se colapsan por regla)');
 
 // Nenhum registro debe caer en el badge rojo desconocido (b-x)
 const unknown = api.allData().filter(m => {

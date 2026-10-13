@@ -445,6 +445,74 @@ function report(records) {
     return problems;
 }
 
+// ------------------------------------------- LOCALIDADES DESDE EL PEL
+// La columna G del Panel trae en secciones_detalle una lista de localidades
+// CORRIMIDA: en 199 de 212 municipios el municipio N lista las localidades de
+// otro (p. ej. el mun 7 lista las de BENITO JUAREZ), aunque el total global
+// coincide (3078 = 3078). La fuente limpia es el reporte del INE
+// (PEL 2024-2025_listadoUbicacionCasillas_JL.xlsx), que build-localidades.js
+// deja en data/localidades.json. Si ese archivo existe, aqui se sustituye el
+// valor de secciones_detalle por la lista del PEL conservando el mismo formato
+// ("1. ACAJETE | 9. LA JOYA | ...") para no tocar nada de la UI; si no
+// existe, se conserva el del Panel y se avisa, de modo que build-data.js
+// sigue funcionando solo con el Excel del Panel.
+function aplicarLocalidadesPel(records) {
+    const res = { aplicados: 0, cambiados: 0, ausentes: [] };
+    const jsonPath = path.join(BASE, 'data', 'localidades.json');
+    if (!fs.existsSync(jsonPath)) {
+        console.log('  AVISO no existe data/localidades.json: secciones_detalle queda con el valor del Panel');
+        console.log('        (para corregirlo: node build-localidades.js && node build-data.js)');
+        return res;
+    }
+    const pel = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    // aviso si el PEL es mas reciente que la lista ya generada (datos viejos)
+    const pels = fs.readdirSync(BASE)
+        .filter(f => /^PEL.*\.xlsx$/i.test(f) && !f.startsWith('~$'))
+        .map(f => ({ f, t: fs.statSync(path.join(BASE, f)).mtimeMs }))
+        .sort((a, b) => b.t - a.t);
+    if (pels.length && pels[0].t > fs.statSync(jsonPath).mtimeMs) {
+        console.log('  AVISO ' + pels[0].f + ' es mas reciente que data/localidades.json:');
+        console.log('        corre node build-localidades.js antes que build-data.js');
+    }
+    const porNum = new Map((pel.municipios || []).map(m => [m.numero, m]));
+    records.forEach(rec => {
+        const m = porNum.get(rec['numero de municipio']);
+        if (!m || !Array.isArray(m.localidades) || !m.localidades.length) {
+            res.ausentes.push(rec['numero de municipio']);
+            return;
+        }
+        const lista = m.localidades.map(l => l.clave + '. ' + l.nombre).join(' | ');
+        if (rec.secciones_detalle !== lista) res.cambiados++;
+        rec.secciones_detalle = lista;
+        res.aplicados++;
+    });
+    return res;
+}
+
+// Re-aplica el campo votos_partidos (barras de votos por partido, calculadas
+// desde los SEE) tras regenerar los registros del Panel. Asi, si build-data.js
+// se ejecuta solo, el campo no se pierde: se toma de data/votos.json con la
+// misma clave (numero de municipio). Si el archivo no existe, se avisa y se
+// deja el registro sin el campo, de modo que build-data.js nunca falla por esto.
+function aplicarVotosSee(records) {
+    const res = { aplicados: 0, ausentes: [] };
+    const jsonPath = path.join(BASE, 'data', 'votos.json');
+    if (!fs.existsSync(jsonPath)) {
+        console.log('  AVISO no existe data/votos.json: votos_partidos quedara sin datos');
+        console.log('        (para generarlo: node build-votos.js && node build-data.js)');
+        return res;
+    }
+    const votos = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    const porNum = new Map(Object.entries(votos.municipios || {}).map(([k, v]) => [+k, v]));
+    records.forEach(rec => {
+        const v = porNum.get(rec['numero de municipio']);
+        if (!v) { res.ausentes.push(rec['numero de municipio']); return; }
+        rec.votos_partidos = v;
+        res.aplicados++;
+    });
+    return res;
+}
+
 // --------------------------------------------------------------------- MAIN
 function main() {
     const srcPath = path.join(BASE, SOURCE);
@@ -472,6 +540,18 @@ function main() {
             (c.conFormato === c.valores ? 'todas: se multiplican x100'
                 : (c.conFormato ? 'MIXTO: cada celda segun su formato' : 'ninguna: ya vienen en porcentaje')) + ')');
     });
+
+    // secciones_detalle se corrige con la lista del PEL antes de validar y
+    // escribir, para que la correccion quede tanto en data/municipios.json
+    // como en el bloque JSON embebido en index.html.
+    const locPel = aplicarLocalidadesPel(records);
+    if (locPel.aplicados) {
+        console.log('Localidades: secciones_detalle tomado de data/localidades.json (reporte del INE):');
+        console.log('  ' + locPel.aplicados + '/' + records.length + ' municipios con lista del PEL' +
+            (locPel.cambiados ? ' · ' + locPel.cambiados + ' cambiaron respecto al Panel' : ' · ninguno cambió respecto al Panel') +
+            (locPel.ausentes.length ? ' · SIN lista en el PEL: ' + locPel.ausentes.join(', ') : ''));
+    }
+
     const problems = report(records);
     if (problems.length) process.exit(1);
 
