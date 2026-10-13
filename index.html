@@ -704,6 +704,10 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 .detail-section{margin-top:12px;display:flex;flex-direction:column;}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
 @media(min-width:640px){.detail-grid{grid-template-columns:1fr 1fr 1fr 1fr}}
+@media(max-width:640px){
+  .detail-item .d-label{min-width:0;max-width:42%;flex-shrink:1}
+  .detail-item .d-val{flex:1 1 56%;min-width:0}
+}
 .detail-item{
   display:flex;align-items:baseline;gap:8px;
   padding:4px 0;
