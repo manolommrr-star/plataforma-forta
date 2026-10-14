@@ -668,6 +668,17 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 .people-details .loc-list{columns:1;column-gap:12px}
 .people-details .loc-pill{font-size:11px;padding:2px 0}
 @media(min-width:560px){.people-details .loc-list{columns:2}}
+/* Vacio: MISMO boton plegado, solo atenuado + sin flecha (no hay nada que abrir) */
+.people-details.people-empty summary.loc-toggle.people-toggle{
+  background:var(--surface-2);
+  border-color:var(--border);
+  color:var(--text-muted);
+  cursor:default;
+}
+.people-details.people-empty summary.loc-toggle.people-toggle:hover{background:var(--surface-2)}
+.people-details.people-empty summary.loc-toggle.people-toggle::after{display:none}
+.people-details.people-empty summary.loc-toggle.people-toggle > i{color:var(--text-muted)}
+.people-details.people-empty .loc-count{background:var(--text-muted)}
 
 /* Localidades DENTRO del hero institucional (fondo azul): acceso rapido */
 .loc-hero{margin-top:12px}

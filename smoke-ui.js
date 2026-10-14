@@ -125,6 +125,11 @@ check((d8.match(/>POTRERO DEL LLANO</g) || []).length === 1,
     'detalle: POTRERO DEL LLANO se muestra UNA sola vez (sin "I")');
 check(!d8.includes('URSULO GALVAN II') && !d8.includes('POTRERO DEL LLANO I'),
     'detalle: no quedan sufijos romanos (II / I) en ALAMO');
+// Regidores y Consejero vacios (ACAJETE 1): mismo boton plegado pero atenuado
+check(d.includes('people-empty') && /Regidores del PAN[\s\S]*?loc-count">0</.test(d),
+    'detalle: Regidores vacio con mismo estilo atenuado y contador 0');
+check(/Consejero estatal[\s\S]*?loc-count">0</.test(d),
+    'detalle: Consejero vacio con mismo estilo atenuado y contador 0');
 // Regidores y Consejero (ALAMO 8 tiene ambos): mismo desplegable que
 // Localidades pero compacto; mantiene su posicion en Representacion
 check(d8.includes('Regidores del PAN') && d8.includes('people-details'),

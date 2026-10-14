@@ -460,10 +460,17 @@ function detailLocalidades(detalle, enHero) {
 // Lista compacta/discreta (Regidores, Consejero): mismo desplegable que
 // Localidades pero en version mini. El valor viene como "A - B - C" o
 // "A, B, C"; se parte en nombres y se pinta en pills numeradas dentro de un
-// <details> cerrado. Sin valor muestra el guion con estilo dim.
+// <details> cerrado. Sin valor muestra el MISMO boton plegado pero atenuado
+// (dim) con contador 0 y sin lista.
 function detailPeopleList(label, raw, icon) {
     var txt = String(raw || '').trim();
-    if (!txt) return detailItem(label, '', 'dim', true);
+    if (!txt) {
+        var out = '<div class="detail-item full loc-details people-details people-empty">';
+        out += '<details>';
+        out += '<summary class="loc-toggle people-toggle"><i data-lucide="' + icon + '"></i><span class="loc-toggle__t">' + label + '</span> <span class="loc-count">0</span></summary>';
+        out += '</details></div>';
+        return out;
+    }
     var nombres = txt.split(/\s*[|,;]\s*|\s+-\s+/).map(function(t) { return t.trim(); }).filter(Boolean);
     if (!nombres.length) nombres = [txt];
     var out = '<div class="detail-item full loc-details people-details">';
