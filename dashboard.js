@@ -703,7 +703,6 @@ function openDetail(id) {
     content.innerHTML = html;
     document.getElementById('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
-    try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
     // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
     var vp = m.votos_partidos || {};
@@ -711,27 +710,97 @@ function openDetail(id) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 
-    // Carrusel movil: puntitos que siguen la tarjeta visible (solo <=640px)
+    // Carrusel movil: puntitos que siguen la tarjeta visible (solo <=640px).
+    // - Loop: el track se duplica y el scroll avanza infinito, asi no se siente
+    //   el salto al llegar al final/inicio.
+    // - auto: avanza sola a dx por cada N ms hasta que el usuario arrastra.
     try {
         var track = content.querySelector('[data-pie-track]');
         var dotsBox = content.querySelector('[data-pie-dots]');
         if (track && dotsBox) {
             var dots = dotsBox.querySelectorAll('i');
+            var W = 0;
+            var dx = 0;
+            var idx = 0;
+            var autoId = 0;
+            var paused = false;
+            var playing = false;
+
+            // Loop: mostrar 2 copys del track para que el scroll pueda superar
+            // la ultima tarjeta y volver a empezar suavemente.
+            var wrap = track.cloneNode(true);
+            track.parentNode.insertBefore(wrap, track.nextSibling);
+            track.parentNode.insertBefore(track.cloneNode(true), wrap.nextSibling);
+            track.classList.add('track-src');
+
+            // La cantidad de pixeles que hay que avanzar para pasar de una
+            // tarjeta a la siguiente (refleja el ancho disponible + gap).
+            var paintDx = function() {
+                var cw = track.clientWidth;
+                if (!cw) return;
+                W = cw;
+                var card = track.querySelector('.chart-pie-card');
+                var gw = card ? card.offsetWidth + parseFloat(getComputedStyle(track).gap) : 1;
+                dx = Math.max(gw, cw * 0.8);
+            };
+            paintDx();
+            window.addEventListener('resize', paintDx);
+
+            // El scroll ya no es un "desechos" manual: se convierte en un
+            // resettable de acuerdo al dx y al loop, manteniendo la
+            // posicion interactiva del usuario aunque pase un auto-frame.
+            var onScroll = function() {
+                var s = track.scrollLeft;
+                var snap = Math.round(s / dx) * dx;
+                if (snaps !== s) {
+                    track.scrollLeft = snap;
+                }
+                paint();
+            };
+            var prev = 0;
+            var snaps = 0;
+            var scrollEl = track;
+            scrollEl.addEventListener('scroll', onScroll, { passive: true });
+
+            // Coherente con la duracion del carrusel.
+            var auto = function() {
+                if (paused) return;
+                scrollEl.scrollLeft += dx;
+            };
+            var startAuto = function() {
+                if (playing) return;
+                playing = true;
+                autoId = setInterval(auto, 3200);
+            };
+            var stopAuto = function() {
+                playing = false;
+                clearInterval(autoId);
+            };
+
+            // Actualiza los dots y reinicia el ciclo en loop.
             var paint = function() {
-                var w = track.clientWidth || 1;
-                var idx = Math.round(track.scrollLeft / w);
+                var w = W || 1;
+                idx = Math.round(scrollEl.scrollLeft / w);
                 if (idx < 0) idx = 0;
                 if (idx > 2) idx = 2;
                 for (var k = 0; k < dots.length; k++) {
                     if (dots[k].classList) dots[k].classList.toggle('on', k === idx);
                 }
             };
-            track.onscroll = paint;
-            paint();
-        }
-    } catch (e) {}
-}
 
+            scrollEl.onscroll = onScroll;
+
+            // Arranca y detiene automaticamente segun la interaccion.
+            scrollEl.addEventListener('pointerdown', stopAuto);
+            scrollEl.addEventListener('pointerup', startAuto);
+            scrollEl.addEventListener('pointerleave', stopAuto);
+
+            startAuto();
+        }
+    } catch (e) {
+        // Sin afectar el resto de la ficha si el carrusel falla.
+    }
+}
 
 // Orden fijo de las votaciones en el detalle y color de cada partido.
 // El pastel usa el color del partido, asi que aqui vive la paleta.
