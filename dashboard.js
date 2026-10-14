@@ -710,92 +710,97 @@ function openDetail(id) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 
-    // Carrusel movil: puntitos que siguen la tarjeta visible (solo <=640px).
-    // - Loop: el track se duplica y el scroll avanza infinito, asi no se siente
-    //   el salto al llegar al final/inicio.
-    // - auto: avanza sola a dx por cada N ms hasta que el usuario arrastra.
+    // Carrusel movil (<=640px): las graficas se deslizan de una en una.
+    // - scroll-snap nativo (CSS) para el gesto tactil.
+    // - auto-play cada 3.2s; se detiene al tocar y sigue al soltar.
+    // - los puntitos siguen la tarjeta centrada; al final vuelve al inicio.
     try {
         var track = content.querySelector('[data-pie-track]');
         var dotsBox = content.querySelector('[data-pie-dots]');
         if (track && dotsBox) {
             var dots = dotsBox.querySelectorAll('i');
-            var W = 0;
-            var dx = 0;
-            var idx = 0;
-            var autoId = 0;
-            var paused = false;
-            var playing = false;
+            var cards = track.querySelectorAll('.chart-pie-card');
+            var n = cards.length;
+            if (n) {
+                var idx = 0;
+                var autoId = 0;
+                var paused = false;
+                var rafId = 0;
 
-            // Loop: mostrar 2 copys del track para que el scroll pueda superar
-            // la ultima tarjeta y volver a empezar suavemente.
-            var wrap = track.cloneNode(true);
-            track.parentNode.insertBefore(wrap, track.nextSibling);
-            track.parentNode.insertBefore(track.cloneNode(true), wrap.nextSibling);
-            track.classList.add('track-src');
+                // Lleva el centro de la tarjeta i al centro del viewport del track.
+                // Se mide con getBoundingClientRect para no depender del contexto
+                // de posicionamiento ni del padding del contenedor.
+                // instant=true salta sin animacion (para el wrap final->inicio).
+                var scrollToIndex = function(i, instant) {
+                    if (i < 0) i = 0;
+                    if (i > n - 1) i = n - 1;
+                    var tb = track.getBoundingClientRect();
+                    var cb = cards[i].getBoundingClientRect();
+                    var relLeft = cb.left - tb.left + track.scrollLeft;
+                    var target = relLeft + cb.width / 2 - track.clientWidth / 2;
+                    if (target < 0) target = 0;
+                    if (instant) {
+                        track.style.scrollBehavior = 'auto';
+                        track.scrollLeft = target;
+                        track.style.scrollBehavior = '';
+                    } else {
+                        track.scrollLeft = target; // smooth via CSS scroll-behavior
+                    }
+                };
 
-            // La cantidad de pixeles que hay que avanzar para pasar de una
-            // tarjeta a la siguiente (refleja el ancho disponible + gap).
-            var paintDx = function() {
-                var cw = track.clientWidth;
-                if (!cw) return;
-                W = cw;
-                var card = track.querySelector('.chart-pie-card');
-                var gw = card ? card.offsetWidth + parseFloat(getComputedStyle(track).gap) : 1;
-                dx = Math.max(gw, cw * 0.8);
-            };
-            paintDx();
-            window.addEventListener('resize', paintDx);
+                // Enciende el puntito de la tarjeta cuyo centro queda mas centrado
+                // (se compara en coordenadas de viewport, asi vale con o sin snap).
+                var paint = function() {
+                    var tb = track.getBoundingClientRect();
+                    var center = tb.left + tb.width / 2;
+                    var best = 0, bestD = Infinity;
+                    for (var k = 0; k < n; k++) {
+                        var cb = cards[k].getBoundingClientRect();
+                        var c = cb.left + cb.width / 2;
+                        var d = Math.abs(c - center);
+                        if (d < bestD) { bestD = d; best = k; }
+                    }
+                    idx = best;
+                    for (var j = 0; j < dots.length; j++) {
+                        if (dots[j].classList) dots[j].classList.toggle('on', j === idx);
+                    }
+                };
 
-            // El scroll ya no es un "desechos" manual: se convierte en un
-            // resettable de acuerdo al dx y al loop, manteniendo la
-            // posicion interactiva del usuario aunque pase un auto-frame.
-            var onScroll = function() {
-                var s = track.scrollLeft;
-                var snap = Math.round(s / dx) * dx;
-                if (snaps !== s) {
-                    track.scrollLeft = snap;
-                }
+                var step = function(dir) {
+                    var to = idx + dir;
+                    var wrapped = false;
+                    if (to < 0) { to = n - 1; wrapped = true; }
+                    if (to > n - 1) { to = 0; wrapped = true; }
+                    // En el wrap (ultima<->primera) se salta sin animacion para no
+                    // rebobinar todo el ancho y que el loop se sienta continuo.
+                    scrollToIndex(to, wrapped);
+                    paint();
+                };
+                var startAuto = function() {
+                    stopAuto();
+                    if (!paused) autoId = setInterval(function() { step(1); }, 3200);
+                };
+                var stopAuto = function() {
+                    if (autoId) { clearInterval(autoId); autoId = 0; }
+                };
+
+                // El gesto tactil manda: al tocar se pausa, al soltar se reanuda.
+                track.addEventListener('pointerdown', function() { paused = true; stopAuto(); });
+                track.addEventListener('pointerup', function() { paused = false; startAuto(); });
+                track.addEventListener('pointercancel', function() { paused = true; stopAuto(); });
+
+                // Mantener los puntitos sincronizados al deslizar a mano
+                // (requestAnimationFrame evita calcular en cada pixel de scroll).
+                track.addEventListener('scroll', function() {
+                    if (rafId) cancelAnimationFrame(rafId);
+                    rafId = requestAnimationFrame(paint);
+                }, { passive: true });
+
+                window.addEventListener('resize', paint);
+
                 paint();
-            };
-            var prev = 0;
-            var snaps = 0;
-            var scrollEl = track;
-            scrollEl.addEventListener('scroll', onScroll, { passive: true });
-
-            // Coherente con la duracion del carrusel.
-            var auto = function() {
-                if (paused) return;
-                scrollEl.scrollLeft += dx;
-            };
-            var startAuto = function() {
-                if (playing) return;
-                playing = true;
-                autoId = setInterval(auto, 3200);
-            };
-            var stopAuto = function() {
-                playing = false;
-                clearInterval(autoId);
-            };
-
-            // Actualiza los dots y reinicia el ciclo en loop.
-            var paint = function() {
-                var w = W || 1;
-                idx = Math.round(scrollEl.scrollLeft / w);
-                if (idx < 0) idx = 0;
-                if (idx > 2) idx = 2;
-                for (var k = 0; k < dots.length; k++) {
-                    if (dots[k].classList) dots[k].classList.toggle('on', k === idx);
-                }
-            };
-
-            scrollEl.onscroll = onScroll;
-
-            // Arranca y detiene automaticamente segun la interaccion.
-            scrollEl.addEventListener('pointerdown', stopAuto);
-            scrollEl.addEventListener('pointerup', startAuto);
-            scrollEl.addEventListener('pointerleave', stopAuto);
-
-            startAuto();
+                startAuto();
+            }
         }
     } catch (e) {
         // Sin afectar el resto de la ficha si el carrusel falla.
