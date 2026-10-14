@@ -716,12 +716,12 @@ function openDetail(id) {
 var ORDEN_VOTACIONES = ['2025 alcaldes', '2024 locales', '2024 federales'];
 var PARTIDO_COLOR = {
     'PAN': '#003f87',    // azul PAN
-    'PRI': '#0e8a4f',    // verde PRI
+    'PRI': '#006341',    // verde bandera de Mexico
     'PRD': '#f2c200',    // amarillo PRD
     'PVEM': '#8bc34a',   // verde claro PVEM
-    'PT': '#d8362a',     // rojo PT
+    'PT': '#C8102E',     // rojo PT / rojo bandera
     'MC': '#f07d13',     // naranja MC
-    'MORENA': '#8c1d40'  // guindo MORENA
+    'MORENA': '#5C0C2D'  // guinda oscuro MORENA
 };
 
 // Pastel de una votacion: una rebanada por partido, en el color del partido.
