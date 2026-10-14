@@ -457,6 +457,24 @@ function detailLocalidades(detalle, enHero) {
     return out;
 }
 
+// Lista compacta/discreta (Regidores, Consejero): mismo desplegable que
+// Localidades pero en version mini. El valor viene como "A - B - C" o
+// "A, B, C"; se parte en nombres y se pinta en pills numeradas dentro de un
+// <details> cerrado. Sin valor muestra el guion con estilo dim.
+function detailPeopleList(label, raw, icon) {
+    var txt = String(raw || '').trim();
+    if (!txt) return detailItem(label, '', 'dim', true);
+    var nombres = txt.split(/\s*[|,;]\s*|\s+-\s+/).map(function(t) { return t.trim(); }).filter(Boolean);
+    if (!nombres.length) nombres = [txt];
+    var out = '<div class="detail-item full loc-details people-details">';
+    out += '<details>';
+    out += '<summary class="loc-toggle people-toggle"><i data-lucide="' + icon + '"></i><span class="loc-toggle__t">' + label + '</span> <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<div class="loc-list">';
+    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(n) + '</div>'; });
+    out += '</div></details></div>';
+    return out;
+}
+
 // Normaliza un telefono para enlaces tel: / WhatsApp (solo digitos, +52 si son 10)
 function phoneTel(phone) {
     if (!phone) return '';
@@ -631,8 +649,8 @@ function openDetail(id) {
         html += detailItem('(PP) Diputado Federal', ppFed, ppFed ? '' : 'dim', true);
         html += detailItem('(PP) Diputado Local', ppLoc, ppLoc ? '' : 'dim', true);
         html += detailItem('(PP) Presidente Municipal', ppPre, ppPre ? '' : 'dim', true);
-        html += detailItem('Regidores del PAN', ediles, ediles ? '' : 'dim', true);
-        html += detailItem('Consejero estatal', consejero, consejero ? '' : 'dim', true);
+        html += detailPeopleList('Regidores del PAN', ediles, 'users');
+        html += detailPeopleList('Consejero estatal', consejero, 'badge-check');
         html += '</div></div>';
     }
 

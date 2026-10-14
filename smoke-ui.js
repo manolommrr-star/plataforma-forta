@@ -125,6 +125,22 @@ check((d8.match(/>POTRERO DEL LLANO</g) || []).length === 1,
     'detalle: POTRERO DEL LLANO se muestra UNA sola vez (sin "I")');
 check(!d8.includes('URSULO GALVAN II') && !d8.includes('POTRERO DEL LLANO I'),
     'detalle: no quedan sufijos romanos (II / I) en ALAMO');
+// Regidores y Consejero (ALAMO 8 tiene ambos): mismo desplegable que
+// Localidades pero compacto; mantiene su posicion en Representacion
+check(d8.includes('Regidores del PAN') && d8.includes('people-details'),
+    'detalle: Regidores del PAN como desplegable compacto');
+check(d8.includes('Consejero estatal') && d8.includes('people-details'),
+    'detalle: Consejero estatal como desplegable compacto');
+const d8Rep = d8.slice(d8.indexOf('Representaci'));
+check(d8Rep.indexOf('Regidores del PAN') > d8Rep.indexOf('(PP) Presidente Municipal') &&
+      d8Rep.indexOf('Consejero estatal') > d8Rep.indexOf('Regidores del PAN'),
+    'detalle: Regidores y Consejero mantienen su posicion en Representacion');
+check(/Regidores del PAN[\s\S]*?loc-count">\d+</.test(d8Rep),
+    'detalle: Regidores muestra contador de personas');
+check(/Consejero estatal[\s\S]*?loc-count">\d+</.test(d8Rep),
+    'detalle: Consejero muestra contador de personas');
+check(d8.includes('Juventino Gallegos') && d8.includes('MARTINEZ SARMIENTO'),
+    'detalle: nombres de Regidores y Consejero visibles al desplegar');
 api.openDetail(1);   // ACAJETE: EL ENCINAL II -> EL ENCINAL (no hay base local, no colapsa)
 const d1 = byId['detail-content'].innerHTML;
 check(d1.includes('>EL ENCINAL<') && !d1.includes('EL ENCINAL II'),

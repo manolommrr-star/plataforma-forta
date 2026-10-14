@@ -653,6 +653,22 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 @media(min-width:560px){.loc-details .loc-list{columns:3}}
 @media(min-width:820px){.loc-details .loc-list{columns:4}}
 
+/* Listas de personas (Regidores, Consejero): mismo desplegable que
+   Localidades pero mini y discreto. Misma posicion, solo mas compacto. */
+.people-details{padding:6px 9px}
+.people-details summary.loc-toggle.people-toggle{
+  padding:6px 9px;
+  font-size:11px;
+  font-weight:600;
+  gap:6px;
+}
+.people-details summary.loc-toggle.people-toggle > i{width:13px;height:13px}
+.people-details summary.loc-toggle.people-toggle::after{font-size:12px}
+.people-details .loc-count{padding:0 6px;font-size:10px}
+.people-details .loc-list{columns:1;column-gap:12px}
+.people-details .loc-pill{font-size:11px;padding:2px 0}
+@media(min-width:560px){.people-details .loc-list{columns:2}}
+
 /* Localidades DENTRO del hero institucional (fondo azul): acceso rapido */
 .loc-hero{margin-top:12px}
 .loc-hero summary.loc-toggle{
