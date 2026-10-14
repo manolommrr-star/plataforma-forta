@@ -67,7 +67,7 @@ ELECTORAL`) · `I distrito_federal` · `J listado_nominal` · `K secciones` ·
 `AC soldados` · `AD meta_afiliados` · `AE vigencia` ·
 `AH presidente_estructura` · `AI presidente_genero` · `AJ presidente_telefono` ·
 `AL secretario_general` · `AM secretario_genero` · `AN secretario_telefono` ·
-`AO secretario_fecha_nacimiento` · `AP candidatos_pan_2025`
+`AO secretario_fecha_nacimiento`
 
 `AO` está marcada como **opcional** (es la columna que se agregó el 30-09-2026):
 si un Excel no la trae, el campo sale `null` y el build sigue funcionando; si
@@ -189,13 +189,8 @@ node verify.js && node smoke-ui.js
   RÍO, SAN RAFAEL y TOMATLÁN ahora tienen 10 dígitos) y `verify.js` solo avisa de
   uno: IXHUATLÁN DEL CAFÉ, cuyo teléfono de secretario tiene 9 dígitos
   (`27 122 6347`). Se deja tal cual, no se inventan dígitos.
-- **Candidatos del PAN 2025 (`candidatos_pan_2025`)**: columna `AO`, viene llena en
-  los 212 municipios con un solo nombre cada una. En el Excel **37 de ellos llegan
-  escritos con `**` delante** (la marca del autor, la misma de los títulos
-  `**PRIORIDAD` y `**DELEGADO`); el tipo `name` de `build-data.js` limpia esa marca
-  y `node build-data.js` avisa cuántas celdas venían marcadas, así que la
-  información no se pierde en silencio. Si el `**` significa algo (candidatura
-  confirmada, pendiente, etc.) habría que guardarla en su propio campo.
+- **Candidatos del PAN 2025**: columna `AP` eliminada a petición: ya no se lee del
+  Excel, no se guarda en los datos ni se muestra en el panel o la exportación.
 - **Fechas**: `excelDate()` admite series de Excel de 1932 en adelante y también
   fechas escritas como texto `dd/mm/aaaa`. Aun así, una celda de
   `secretario_fecha_nacimiento` se queda vacía por defecto de origen: en SAN RAFAEL

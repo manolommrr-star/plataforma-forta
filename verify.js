@@ -1,6 +1,6 @@
 // verify.js — Verificación de integridad de la plataforma (Node.js)
 // Uso: node verify.js          (después de node build-data.js)
-// Comprueba: JSON embebido + data/municipios.json, esquema de 38 campos,
+// Comprueba: JSON embebido + data/municipios.json, esquema de 40 campos,
 // tipos, fechas, teléfonos, estatus reconocibles, numeración 1-212,
 // etiquetas de exportación, balance de CSS/DIVs y sintaxis del JS.
 
@@ -153,10 +153,10 @@ function validate(data, label) {
     ['secretario_genero', 'gender-or-null'],
     ['secretario_telefono', 'string-or-null'],
     ['secretario_fecha_nacimiento', 'date-or-null'],
-    ['candidatos_pan_2025', 'string-or-null'],
     ['metricas', 'object'],
     ['etiquetas', 'array'],
-    ['metadata', 'object']
+    ['metadata', 'object'],
+    ['votos_partidos', 'object']
   ];
   // El Excel ya no trae codigos cortos (CDM/DM/X): trae el nombre completo.
   // Estos son los unicos valores que el dashboard sabe colorear.
@@ -293,7 +293,7 @@ if (!jsSource) {
         .filter(k => zonaUI.indexOf(k) < 0 && jsSource.slice(0, jsSource.indexOf('function renderList')).indexOf("'" + k + "'") < 0);
       invisibles.length
         ? fail('campos sin uso en la interfaz: ' + invisibles.join(', '))
-        : ok('los 35 campos del Excel se muestran en tarjeta, detalle o exportación');
+        : ok('los 34 campos del Excel se muestran en tarjeta, detalle o exportación');
     }
   } catch (e) {
     fail('lógica de la interfaz: ' + e.message);

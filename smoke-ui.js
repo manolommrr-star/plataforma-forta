@@ -67,19 +67,10 @@ check(d.includes('Representaci\u00f3n del partido'), 'detalle: seccion Represent
 check(d.includes('Coordinador de zona'), 'detalle: Coordinador de zona');
 check(d.includes('Secretario general'), 'detalle: Secretario general');
 check(d.includes('228 853 3676'), 'detalle: telefono del presidente');
-check(d.includes('Candidato(a) del PAN 2025') && d.includes('ABIGAIL APODACA ZAVALETA'),
-    'detalle: candidato(a) del PAN 2025 (campo nuevo, columna AO)');
-
-// panel 30-09-2026: la columna AO llega en 37 celdas con la marca "**" del autor
-check(api.allData().every(m => m.candidatos_pan_2025 && !/^\*|\*\*$/.test(m.candidatos_pan_2025)),
-    'candidatos_pan_2025: los 212 nombres sin la marca "**" del Excel');
-
-// la busqueda global recorre todos los campos: debe encontrar por apellido del candidato
-const porCandidato = api.search('apodaca zavaleta');
-check(porCandidato.length >= 1 &&
-      porCandidato.some(m => (m.candidatos_pan_2025 || '').includes('APODACA ZAVALETA')),
-    'busqueda global: encuentra el municipio por el nombre del candidato (' +
-    porCandidato.length + ')');
+check(!d.includes('Candidato(a) del PAN 2025') && !d.includes('ABIGAIL APODACA ZAVALETA'),
+    'detalle: candidato(a) del PAN 2025 eliminado del dashboard');
+check(api.allData().every(m => !('candidatos_pan_2025' in m)),
+    'candidatos_pan_2025: campo eliminado de los datos');
 check(!d.includes('% 2024 (locales)') && !d.includes('% 2024 (federales)') && !d.includes('% 2025</div>'),
     'detalle: los %/votos del Panel ya no se listan (los muestra la grafica por partido)');
 check(d.includes('Vigencia de la estructura'), 'detalle: Vigencia');

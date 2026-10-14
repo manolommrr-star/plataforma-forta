@@ -305,8 +305,7 @@ var FIELD_LABELS = {
     'secretario_general': 'Secretario general',
     'secretario_genero': 'Género secretario',
     'secretario_telefono': 'Teléfono secretario',
-    'secretario_fecha_nacimiento': 'Fecha nacimiento secretario',
-    'candidatos_pan_2025': 'Candidato(a) del PAN 2025'
+    'secretario_fecha_nacimiento': 'Fecha nacimiento secretario'
 };
 function fieldLabel(k) { return FIELD_LABELS[k] || k; }
 
@@ -627,15 +626,13 @@ function openDetail(id) {
     var ppPre = m.pp_presidente_municipal || '';
     var ediles = m.regidores_pan || '';
     var consejero = m.consejero_estatal || '';
-    var candidato = m.candidatos_pan_2025 || '';
-    if (ppFed || ppLoc || ppPre || ediles || consejero || candidato) {
+    if (ppFed || ppLoc || ppPre || ediles || consejero) {
         html += '<div class="detail-section"><h3>Representación del partido</h3><div class="detail-grid">';
         html += detailItem('(PP) Diputado Federal', ppFed, ppFed ? '' : 'dim', true);
         html += detailItem('(PP) Diputado Local', ppLoc, ppLoc ? '' : 'dim', true);
         html += detailItem('(PP) Presidente Municipal', ppPre, ppPre ? '' : 'dim', true);
         html += detailItem('Regidores del PAN', ediles, ediles ? '' : 'dim', true);
         html += detailItem('Consejero estatal', consejero, consejero ? '' : 'dim', true);
-        html += detailItem('Candidato(a) del PAN 2025', candidato, candidato ? '' : 'dim', true);
         html += '</div></div>';
     }
 

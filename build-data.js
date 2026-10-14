@@ -191,13 +191,8 @@ const COLUMNS = [
     ['AL', 'secretariogeneral',     'secretario_general',          'text'],
     ['AM', 'genero',                'secretario_genero',           'gender'],
     ['AN', 'telefono',              'secretario_telefono',         'phone'],
-    ['AO', 'fechanacimiento',       'secretario_fecha_nacimiento', 'date'],
-    // AP "CANDIDATOS PAN 2025": un nombre por municipio. Celdas marcadas con
-    // "**" (marca del autor, igual que "**PRIORIDAD"/"**DELEGADO"); el tipo
-    // 'name' limpia esa marca. Va como OPCIONAL para que el panel anterior
-    // siga construyendo sin errores.
-    ['AP', 'candidatospan2025',     'candidatos_pan_2025',         'name', true]
-];
+    ['AO', 'fechanacimiento',       'secretario_fecha_nacimiento', 'date']
+]; // (columna AP "CANDIDATOS PAN 2025" eliminada a peticion: ya no se lee ni se guarda)
 
 // Columnas con titulo en el Excel que se ignoran a proposito (0-2 datos)
 const IGNORED = {
@@ -205,7 +200,8 @@ const IGNORED = {
     AA: 'CONSEJERO NACIONAL (vacio)',
     AF: 'FINANCIAMIENTO (vacio)',
     AG: 'EJERCICIO (vacio)',
-    AK: 'FECHA NACIMIENTO del presidente (solo 2 valores)'
+    AK: 'FECHA NACIMIENTO del presidente (solo 2 valores)',
+    AP: 'CANDIDATOS PAN 2025 (eliminado a peticion)'
 };
 
 // ------------------------------------------------------- LECTURA DE LA HOJA
