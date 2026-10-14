@@ -708,14 +708,16 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   background:#fff;border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:7px 9px;text-align:center;
 }
-/* Carrusel solo en telefono (<=640px): deslizar 1 grafica a la vez con
-   scroll-snap + puntitos. En escritorio sigue la fila de 3 tarjetas. */
+/* Carrusel solo en telefono (<=640px): LOOP infinito controlado por JS.
+   El scroll-snap nativo se DESACTIVA a proposito: pelea con el "teleport"
+   entre zonas de clones (tirones/glitches, sobre todo en iOS). El centrado y
+   el loop los maneja dashboard.js con scroll suave + clones replicados. */
 @media(max-width:640px){
   .pie-hero{
     flex-wrap:nowrap;
     justify-content:flex-start;
     overflow-x:auto;
-    scroll-snap-type:x mandatory;
+    scroll-snap-type:none;
     -webkit-overflow-scrolling:touch;
     scrollbar-width:none;
     scroll-behavior:smooth;
@@ -727,7 +729,6 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .pie-hero .chart-pie-card{
     flex:0 0 74%;
     max-width:74%;
-    scroll-snap-align:center;
   }
   .chart-pie{width:150px;height:150px}
 }

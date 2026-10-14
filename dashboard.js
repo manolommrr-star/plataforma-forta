@@ -710,94 +710,132 @@ function openDetail(id) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 
-    // Carrusel movil (<=640px): las graficas se deslizan de una en una.
-    // - scroll-snap nativo (CSS) para el gesto tactil.
-    // - auto-play cada 3.2s; se detiene al tocar y sigue al soltar.
-    // - los puntitos siguen la tarjeta centrada; al final vuelve al inicio.
+    // Carrusel movil (<=640px): LOOP INFINITO real y continuo.
+    //
+    // Como no existe scroll nativo "circular", se replica el grupo de graficas
+    // una vez ANTES y otra DESPUES de las reales:  [clones][reales][clones].
+    // Arrancamos posicionados en las reales. Al deslizar y entrar en una zona de
+    // clones, hacemos un "salto" sin animacion a la posicion real equivalente:
+    // como lo que se ve es identico (mismas graficas), el usuario no percibe el
+    // corte y el loop parece infinito en ambas direcciones.
+    //
+    // SOLO en telefono: en escritorio las 3 tarjetas van en fila (sin overflow),
+    // asi que aqui no se clona ni se anima nada.
     try {
+        var mq = window.matchMedia ? window.matchMedia('(max-width:640px)') : { matches: false };
         var track = content.querySelector('[data-pie-track]');
         var dotsBox = content.querySelector('[data-pie-dots]');
-        if (track && dotsBox) {
+        if (mq.matches && track && dotsBox) {
             var dots = dotsBox.querySelectorAll('i');
-            var cards = track.querySelectorAll('.chart-pie-card');
-            var n = cards.length;
-            if (n) {
-                var idx = 0;
-                var autoId = 0;
-                var paused = false;
-                var rafId = 0;
+            var originals = track.querySelectorAll('.chart-pie-card');
+            var n = originals.length;
+            if (n && dots.length) {
 
-                // Lleva el centro de la tarjeta i al centro del viewport del track.
-                // Se mide con getBoundingClientRect para no depender del contexto
-                // de posicionamiento ni del padding del contenedor.
-                // instant=true salta sin animacion (para el wrap final->inicio).
-                var scrollToIndex = function(i, instant) {
-                    if (i < 0) i = 0;
-                    if (i > n - 1) i = n - 1;
+                // Datos de cada votacion, para redibujar los canvas de los clones.
+                var vp = m.votos_partidos || {};
+                var datos = ORDEN_VOTACIONES.map(function(et) { return vp[et]; });
+
+                // --- 1) Replicar el grupo antes y despues de las reales ---
+                var i, clone;
+                for (i = n - 1; i >= 0; i--) {                 // bloque izquierdo
+                    clone = originals[i].cloneNode(true);
+                    clone.classList.add('pie-clone');
+                    clone.removeAttribute('id');
+                    track.insertBefore(clone, track.firstChild);
+                }
+                for (i = 0; i < n; i++) {                       // bloque derecho
+                    clone = originals[i].cloneNode(true);
+                    clone.classList.add('pie-clone');
+                    clone.removeAttribute('id');
+                    track.appendChild(clone);
+                }
+                // Redibujar los pasteles de todos los clones (los <canvas> vienen
+                // en blanco al clonar y no tienen id).
+                var clones = track.querySelectorAll('.pie-clone');
+                Array.prototype.forEach.call(clones, function(cl, c) {
+                    var cv = cl.querySelector('canvas.chart-pie');
+                    if (cv) drawPie(cv, datos[c % n]);
+                });
+
+                var cards = track.querySelectorAll('.chart-pie-card');
+                var total = cards.length;   // 3n
+                var idx = n;                // arranca en la primera real
+
+                // --- 2) Utilidades de posicion (centro de tarjeta <-> centro viewport) ---
+                var scrollToIndex = function(k, instant) {
+                    if (k < 0) k = 0;
+                    if (k > total - 1) k = total - 1;
                     var tb = track.getBoundingClientRect();
-                    var cb = cards[i].getBoundingClientRect();
-                    var relLeft = cb.left - tb.left + track.scrollLeft;
-                    var target = relLeft + cb.width / 2 - track.clientWidth / 2;
+                    var cb = cards[k].getBoundingClientRect();
+                    var target = (cb.left - tb.left + track.scrollLeft) + cb.width / 2 - track.clientWidth / 2;
                     if (target < 0) target = 0;
+                    var max = track.scrollWidth - track.clientWidth;
+                    if (target > max) target = max;
                     if (instant) {
                         track.style.scrollBehavior = 'auto';
                         track.scrollLeft = target;
                         track.style.scrollBehavior = '';
                     } else {
-                        track.scrollLeft = target; // smooth via CSS scroll-behavior
+                        track.scrollLeft = target; // smooth via CSS
                     }
                 };
-
-                // Enciende el puntito de la tarjeta cuyo centro queda mas centrado
-                // (se compara en coordenadas de viewport, asi vale con o sin snap).
-                var paint = function() {
+                // Indice real (0..n-1) de la tarjeta mas centrada, para los dots.
+                var realIndexOf = function() {
                     var tb = track.getBoundingClientRect();
                     var center = tb.left + tb.width / 2;
-                    var best = 0, bestD = Infinity;
-                    for (var k = 0; k < n; k++) {
+                    var best = 0, bestD = Infinity, pos = 0;
+                    for (var k = 0; k < total; k++) {
                         var cb = cards[k].getBoundingClientRect();
-                        var c = cb.left + cb.width / 2;
-                        var d = Math.abs(c - center);
-                        if (d < bestD) { bestD = d; best = k; }
+                        var d = Math.abs((cb.left + cb.width / 2) - center);
+                        if (d < bestD) { bestD = d; pos = k; }
                     }
-                    idx = best;
+                    best = ((pos % n) + n) % n;
+                    idx = pos;
+                    return best;
+                };
+                var paint = function() {
+                    var r = realIndexOf();
                     for (var j = 0; j < dots.length; j++) {
-                        if (dots[j].classList) dots[j].classList.toggle('on', j === idx);
+                        if (dots[j].classList) dots[j].classList.toggle('on', j === r);
                     }
+                };
+                // Si estamos en una zona de clones, saltar (sin animacion) a la
+                // posicion real equivalente para mantener el loop infinito.
+                // Se actualiza idx junto con el salto para que el siguiente
+                // paso del auto-play continue desde la posicion correcta.
+                var rewrap = function() {
+                    if (idx < n) { idx += n; scrollToIndex(idx, true); }            // clon izq -> real
+                    else if (idx >= 2 * n) { idx -= n; scrollToIndex(idx, true); }  // clon der -> real
                 };
 
-                var step = function(dir) {
-                    var to = idx + dir;
-                    var wrapped = false;
-                    if (to < 0) { to = n - 1; wrapped = true; }
-                    if (to > n - 1) { to = 0; wrapped = true; }
-                    // En el wrap (ultima<->primera) se salta sin animacion para no
-                    // rebobinar todo el ancho y que el loop se sienta continuo.
-                    scrollToIndex(to, wrapped);
-                    paint();
-                };
+                // --- 3) Auto-play cada 3.2s, con pausa al tocar ---
+                var autoId = 0, paused = false, rafId = 0;
+                var stopAuto = function() { if (autoId) { clearInterval(autoId); autoId = 0; } };
                 var startAuto = function() {
                     stopAuto();
                     if (!paused) autoId = setInterval(function() { step(1); }, 3200);
                 };
-                var stopAuto = function() {
-                    if (autoId) { clearInterval(autoId); autoId = 0; }
-                };
-
-                // El gesto tactil manda: al tocar se pausa, al soltar se reanuda.
-                track.addEventListener('pointerdown', function() { paused = true; stopAuto(); });
-                track.addEventListener('pointerup', function() { paused = false; startAuto(); });
-                track.addEventListener('pointercancel', function() { paused = true; stopAuto(); });
-
-                // Mantener los puntitos sincronizados al deslizar a mano
-                // (requestAnimationFrame evita calcular en cada pixel de scroll).
-                track.addEventListener('scroll', function() {
+                function step(dir) {
+                    scrollToIndex(idx + dir, false);
                     if (rafId) cancelAnimationFrame(rafId);
                     rafId = requestAnimationFrame(paint);
+                }
+
+                // Scroll manual: refresca dots (rAF) y, al asentarse, re-enlaza.
+                track.addEventListener('scroll', function() {
+                    if (rafId) cancelAnimationFrame(rafId);
+                    rafId = requestAnimationFrame(function() { paint(); rewrap(); });
                 }, { passive: true });
 
-                window.addEventListener('resize', paint);
+                // Toque: pausa; al soltar: reanuda.
+                track.addEventListener('pointerdown', function() { paused = true; stopAuto(); });
+                track.addEventListener('pointerup',   function() { paused = false; startAuto(); });
+                track.addEventListener('pointercancel', function() { paused = true; stopAuto(); });
 
+                window.addEventListener('resize', function() { scrollToIndex(idx, true); });
+
+                // Arranque en la primera grafica real.
+                scrollToIndex(idx, true);
                 paint();
                 startAuto();
             }
@@ -826,8 +864,15 @@ var PARTIDO_COLOR = {
 // calcula cada rebanada como votos/total, o sea el mismo % de la leyenda.
 function renderDetailPie(canvasId, data) {
     if (!window.Chart) return;
-    var canvas = document.getElementById(canvasId);
-    if (!canvas || !data || !data.barras || !data.barras.length) return;
+    drawPie(document.getElementById(canvasId), data);
+}
+
+// Dibuja el pastel en un canvas ya presente en el DOM. Vive separada de
+// renderDetailPie para poder redibujar tambien los clones del carrusel
+// (esos canvas no tienen id, se localizan por elemento).
+function drawPie(canvas, data) {
+    if (!window.Chart || !canvas) return;
+    if (!data || !data.barras || !data.barras.length) return;
     var barras = data.barras.slice().sort(function(a, b) { return b.votos - a.votos; });
     var ctx = canvas.getContext('2d');
     new Chart(ctx, {
