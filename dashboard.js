@@ -710,14 +710,18 @@ function openDetail(id) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 
-    // Carrusel movil (<=640px): LOOP INFINITO real y continuo.
+    // Carrusel movil (<=640px): LOOP INFINITO real y organico.
     //
     // Como no existe scroll nativo "circular", se replica el grupo de graficas
     // una vez ANTES y otra DESPUES de las reales:  [clones][reales][clones].
-    // Arrancamos posicionados en las reales. Al deslizar y entrar en una zona de
-    // clones, hacemos un "salto" sin animacion a la posicion real equivalente:
-    // como lo que se ve es identico (mismas graficas), el usuario no percibe el
-    // corte y el loop parece infinito en ambas direcciones.
+    // Arrancamos posicionados en las reales.
+    //
+    // La animacion NO usa el scroll suave del navegador (ese pelea con el loop y
+    // provoca el "salto"): la hacemos nosotros frame a frame con requestAnimation-
+    // Frame y una curva de easing suave. Al LLEGAR a una zona de clones hacemos el
+    // "teleport" instantaneo a la posicion real equivalente; como ocurre justo al
+    // final, sobre una imagen identica (mismas graficas), el corte es imperceptible
+    // y el loop se siente continuo en ambas direcciones.
     //
     // SOLO en telefono: en escritorio las 3 tarjetas van en fila (sin overflow),
     // asi que aqui no se clona ni se anima nada.
@@ -761,82 +765,112 @@ function openDetail(id) {
                 var total = cards.length;   // 3n
                 var idx = n;                // arranca en la primera real
 
-                // --- 2) Utilidades de posicion (centro de tarjeta <-> centro viewport) ---
-                var scrollToIndex = function(k, instant) {
+                // --- 2) Posicion (centro de tarjeta <-> centro del viewport) ---
+                // Centro en pixeles de scroll que deja la tarjeta k centrada.
+                var centerOf = function(k) {
                     if (k < 0) k = 0;
                     if (k > total - 1) k = total - 1;
                     var tb = track.getBoundingClientRect();
                     var cb = cards[k].getBoundingClientRect();
                     var target = (cb.left - tb.left + track.scrollLeft) + cb.width / 2 - track.clientWidth / 2;
-                    if (target < 0) target = 0;
                     var max = track.scrollWidth - track.clientWidth;
+                    if (target < 0) target = 0;
                     if (target > max) target = max;
-                    if (instant) {
-                        track.style.scrollBehavior = 'auto';
-                        track.scrollLeft = target;
-                        track.style.scrollBehavior = '';
-                    } else {
-                        track.scrollLeft = target; // smooth via CSS
-                    }
+                    return target;
                 };
-                // Indice real (0..n-1) de la tarjeta mas centrada, para los dots.
-                var realIndexOf = function() {
+                // Tarjeta (0..total-1) cuyo centro queda mas centrado ahora.
+                var nearestIndex = function() {
                     var tb = track.getBoundingClientRect();
                     var center = tb.left + tb.width / 2;
-                    var best = 0, bestD = Infinity, pos = 0;
+                    var best = 0, bestD = Infinity;
                     for (var k = 0; k < total; k++) {
                         var cb = cards[k].getBoundingClientRect();
                         var d = Math.abs((cb.left + cb.width / 2) - center);
-                        if (d < bestD) { bestD = d; pos = k; }
+                        if (d < bestD) { bestD = d; best = k; }
                     }
-                    best = ((pos % n) + n) % n;
-                    idx = pos;
                     return best;
                 };
+                // Indice real (0..n-1) de una posicion cualquiera, para los dots.
+                var realOf = function(pos) { return ((pos % n) + n) % n; };
+
+                // --- 3) Motor de animacion propio (rAF + easing) ---
+                var rafId = 0;
+                var anim = null;   // {from,to,t0,dur} mientras anima
+                var EASE = function(p) { // easeInOutCubic: arranca y frena suave
+                    return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+                };
                 var paint = function() {
-                    var r = realIndexOf();
+                    var r = realOf(nearestIndex());
                     for (var j = 0; j < dots.length; j++) {
                         if (dots[j].classList) dots[j].classList.toggle('on', j === r);
                     }
                 };
-                // Si estamos en una zona de clones, saltar (sin animacion) a la
-                // posicion real equivalente para mantener el loop infinito.
-                // Se actualiza idx junto con el salto para que el siguiente
-                // paso del auto-play continue desde la posicion correcta.
+                // Ajusta la posicion a la zona real (teleport imperceptible).
+                // Se llama SOLO cuando no hay animacion en curso.
                 var rewrap = function() {
-                    if (idx < n) { idx += n; scrollToIndex(idx, true); }            // clon izq -> real
-                    else if (idx >= 2 * n) { idx -= n; scrollToIndex(idx, true); }  // clon der -> real
+                    idx = nearestIndex();
+                    if (idx < n) { idx += n; track.scrollLeft = centerOf(idx); }
+                    else if (idx >= 2 * n) { idx -= n; track.scrollLeft = centerOf(idx); }
+                };
+                var frame = function(t) {
+                    if (!anim) return;
+                    if (!anim.t0) anim.t0 = t;
+                    var p = Math.min((t - anim.t0) / anim.dur, 1);
+                    track.scrollLeft = anim.from + (anim.to - anim.from) * EASE(p);
+                    paint();
+                    if (p < 1) {
+                        rafId = requestAnimationFrame(frame);
+                    } else {
+                        // Fin de la animacion: ahora si, teleport si hace falta.
+                        anim = null;
+                        rewrap();
+                        paint();
+                    }
+                };
+                var goTo = function(k) {
+                    if (k < 0) k = 0;
+                    if (k > total - 1) k = total - 1;
+                    if (rafId) cancelAnimationFrame(rafId);
+                    anim = { from: track.scrollLeft, to: centerOf(k), t0: 0, dur: 620 };
+                    rafId = requestAnimationFrame(frame);
+                };
+                // Coloca una tarjeta centrada sin animacion (arranque / resize).
+                var jumpTo = function(k) {
+                    if (rafId) cancelAnimationFrame(rafId);
+                    anim = null;
+                    idx = k;
+                    track.scrollLeft = centerOf(k);
+                    paint();
                 };
 
-                // --- 3) Auto-play cada 3.2s, con pausa al tocar ---
-                var autoId = 0, paused = false, rafId = 0;
+                // --- 4) Auto-play cada 3.2s, con pausa al tocar ---
+                var autoId = 0, paused = false, dragging = false;
                 var stopAuto = function() { if (autoId) { clearInterval(autoId); autoId = 0; } };
+                var step = function(dir) {
+                    var from = nearestIndex();
+                    goTo(from + dir);
+                };
                 var startAuto = function() {
                     stopAuto();
-                    if (!paused) autoId = setInterval(function() { step(1); }, 3200);
+                    if (!paused) autoId = setInterval(function() { if (!dragging) step(1); }, 3200);
                 };
-                function step(dir) {
-                    scrollToIndex(idx + dir, false);
-                    if (rafId) cancelAnimationFrame(rafId);
-                    rafId = requestAnimationFrame(paint);
-                }
 
-                // Scroll manual: refresca dots (rAF) y, al asentarse, re-enlaza.
+                // --- 5) Interaccion del usuario ---
+                track.addEventListener('pointerdown', function() { dragging = true; paused = true; stopAuto(); if (rafId) cancelAnimationFrame(rafId); anim = null; });
+                track.addEventListener('pointerup',   function() { dragging = false; paused = false; rewrap(); paint(); startAuto(); });
+                track.addEventListener('pointercancel', function() { dragging = true; paused = true; stopAuto(); });
+
+                // Durante el arrastre solo actualizamos los dots; el teleport se
+                // hace al soltar (pointerup), cuando el dedo ya no interfiere.
                 track.addEventListener('scroll', function() {
                     if (rafId) cancelAnimationFrame(rafId);
-                    rafId = requestAnimationFrame(function() { paint(); rewrap(); });
+                    rafId = requestAnimationFrame(paint);
                 }, { passive: true });
 
-                // Toque: pausa; al soltar: reanuda.
-                track.addEventListener('pointerdown', function() { paused = true; stopAuto(); });
-                track.addEventListener('pointerup',   function() { paused = false; startAuto(); });
-                track.addEventListener('pointercancel', function() { paused = true; stopAuto(); });
-
-                window.addEventListener('resize', function() { scrollToIndex(idx, true); });
+                window.addEventListener('resize', function() { jumpTo(nearestIndex()); });
 
                 // Arranque en la primera grafica real.
-                scrollToIndex(idx, true);
-                paint();
+                jumpTo(n);
                 startAuto();
             }
         }

@@ -709,9 +709,10 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   border-radius:var(--radius-sm);padding:7px 9px;text-align:center;
 }
 /* Carrusel solo en telefono (<=640px): LOOP infinito controlado por JS.
-   El scroll-snap nativo se DESACTIVA a proposito: pelea con el "teleport"
-   entre zonas de clones (tirones/glitches, sobre todo en iOS). El centrado y
-   el loop los maneja dashboard.js con scroll suave + clones replicados. */
+   Se DESACTIVA el scroll-snap nativo (pelea con el teleport entre clones) y
+   NO se usa scroll-behavior:smooth: la animacion la hace dashboard.js frame a
+   frame con rAF, para poder teletransportar SOLO al final y que el loop no
+   dé saltos. En escritorio siguen las 3 tarjetas en fila. */
 @media(max-width:640px){
   .pie-hero{
     flex-wrap:nowrap;
@@ -720,7 +721,6 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
     scroll-snap-type:none;
     -webkit-overflow-scrolling:touch;
     scrollbar-width:none;
-    scroll-behavior:smooth;
     gap:14px;
     padding:0 6% 12px;
     margin:0;
