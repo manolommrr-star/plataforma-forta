@@ -379,7 +379,7 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 .muni-list{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:8px;
   margin-bottom:16px;
 }
 .muni-card{
@@ -387,13 +387,13 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   border:1px solid var(--border);
   border-left:4px solid var(--accent);
   border-radius:var(--radius);
-  padding:14px 16px;
+  padding:9px 12px;
   cursor:pointer;
   box-shadow:var(--shadow);
   transition:var(--transition);
   display:flex;
   flex-direction:column;
-  gap:6px;
+  gap:3px;
   position:relative;
   overflow:hidden;
 }
@@ -708,18 +708,18 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   background:#fff;border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:7px 9px;text-align:center;
 }
-/* Carrusel solo en telefono (<=640px): las graficas se deslizan y se AUTO-CENTRAN.
-   Truco de centrado: cada tarjeta ocupa el 100% del ancho util (flex 0 0 100%)
-   y el contenedor lleva padding lateral. Ese padding ES el espacio en blanco que
-   necesita el scroll para poder centrar TAMBIEN la primera y la ultima tarjeta
-   (si sobra ancho de tarjeta sin este espacio, el scroll topa y los extremos
-   quedan descentrados). En escritorio siguen las 3 tarjetas en fila. */
+/* Carrusel solo en telefono (<=640px): las graficas se deslizan y se AUTO-CENTRAN
+   con scroll-snap NATIVO del navegador. Cada tarjeta ocupa el 100% del ancho util
+   (flex 0 0 100%) y el padding lateral (10% a cada lado) es el espacio en blanco
+   que permite centrar TAMBIEN la primera y la ultima tarjeta. El scroll-snap
+   centra solo al soltar el dedo y respeta la inercia. En escritorio siguen las 3
+   tarjetas en fila. */
 @media(max-width:640px){
   .pie-hero{
     flex-wrap:nowrap;
     justify-content:flex-start;
     overflow-x:auto;
-    scroll-snap-type:none;
+    scroll-snap-type:x mandatory;
     -webkit-overflow-scrolling:touch;
     scrollbar-width:none;
     gap:14px;
@@ -730,6 +730,7 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .pie-hero .chart-pie-card{
     flex:0 0 100%;
     max-width:100%;
+    scroll-snap-align:center;
   }
   .chart-pie{width:150px;height:150px}
 }

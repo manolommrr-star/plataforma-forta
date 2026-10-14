@@ -374,18 +374,6 @@ function renderList() {
                     '<span class="muni-card__name">' + escapeHtml(m.municipio || 'Sin nombre') + '</span>' +
                     '<span class="muni-card__badge ' + estatusClass(est) + '" title="' + escapeHtml(est || 'Sin estatus de estructura') + '">' + escapeHtml(estatusShort(est)) + '</span>' +
                 '</div>' +
-                '<div class="muni-card__meta">' +
-                    '<span><i data-lucide="users"></i> Nominal: <b>' + formatNum(m.listado_nominal) + '</b></span>' +
-                    '<span><i data-lucide="layers"></i> Secciones: <b>' + formatNum(m.secciones) + '</b></span>' +
-                    '<span><i data-lucide="home"></i> Casillas: <b>' + formatNum(m.casillas) + '</b></span>' +
-                    '<span><i data-lucide="route"></i> Rutas: <b>' + (m.rutas != null ? formatNum(m.rutas) : '—') + '</b></span>' +
-                '</div>' +
-                '<div class="muni-card__meta muni-card__meta--extra">' +
-                    '<span><i data-lucide="map"></i> Zona: <b>' + (m.zona != null ? m.zona : '—') + '</b></span>' +
-                    '<span><i data-lucide="shield"></i> Soldados: <b>' + formatNum(m.soldados) + '</b></span>' +
-                    '<span><i data-lucide="target"></i> Meta afiliados: <b>' + formatNum(m.meta_afiliados) + '</b></span>' +
-                    '<span class="muni-person" title="' + escapeHtml(m.presidente_estructura || 'Sin presidente de estructura') + '"><i data-lucide="user-round"></i> ' + escapeHtml(m.presidente_estructura || 'Sin presidente') + '</span>' +
-                '</div>' +
                 '<div class="muni-card__districts">DL: <em>' + escapeHtml(m.distrito_local || '\u2014') + '</em> &nbsp;·&nbsp; DF: <em>' + escapeHtml(m.distrito_federal || '\u2014') + '</em></div>';
             card.addEventListener('click', function() { openDetail(m['numero de municipio']); });
             listEl.appendChild(card);

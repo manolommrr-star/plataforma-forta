@@ -50,10 +50,9 @@ check(api.allData().length === 212, 'loadData(): 212 municipios cargados (' + ap
 check(cards.length === 20, 'renderList(): 20 tarjetas iniciales (' + cards.length + ')');
 const c0 = cards[0].innerHTML;
 check(/muni-card__badge (b-cdm|b-dm|b-co|b-x|none)/.test(c0), 'badge con clase valida: ' + (/muni-card__badge [a-z-]+/.exec(c0) || ['(ninguna)'])[0]);
-check(c0.includes('Zona:'), 'tarjeta muestra Zona');
-check(c0.includes('Soldados:'), 'tarjeta muestra Soldados');
-check(c0.includes('Meta afiliados:'), 'tarjeta muestra Meta afiliados');
-check(c0.includes('muni-person'), 'tarjeta muestra Presidente de estructura');
+check(c0.includes('muni-card__name'), 'tarjeta muestra el nombre del municipio');
+check(c0.includes('muni-card__districts') && /DL:.*DF:/.test(c0), 'tarjeta muestra DL y DF (estado de estructura)');
+check(!c0.includes('muni-card__meta') && !c0.includes('Zona:') && !c0.includes('Soldados:'), 'tarjeta compacta: sin metricas extra (Zona/Soldados/Nominal/etc.)');
 
 api.openDetail(1);
 const d = byId['detail-content'].innerHTML;
