@@ -708,6 +708,40 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   background:#fff;border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:7px 9px;text-align:center;
 }
+/* Carrusel solo en telefono (<=640px): deslizar 1 grafica a la vez con
+   scroll-snap + puntitos. En escritorio sigue la fila de 3 tarjetas. */
+@media(max-width:640px){
+  .pie-hero{
+    flex-wrap:nowrap;
+    justify-content:flex-start;
+    overflow-x:auto;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    gap:10px;
+    padding:2px 2px 10px;
+    margin:0 -2px;
+  }
+  .pie-hero::-webkit-scrollbar{display:none}
+  .pie-hero .chart-pie-card{
+    flex:0 0 82%;
+    max-width:82%;
+    scroll-snap-align:center;
+  }
+  .chart-pie{width:150px;height:150px}
+}
+.pie-dots{display:none}
+@media(max-width:640px){
+  .pie-dots{
+    display:flex;justify-content:center;gap:6px;
+    margin-top:2px;
+  }
+  .pie-dots i{
+    width:6px;height:6px;border-radius:999px;
+    background:var(--border);
+  }
+  .pie-dots i.on{background:var(--accent)}
+}
 .chart-pie-label{
   font-size:11px;font-weight:800;color:var(--accent);
   line-height:1.25;margin-bottom:4px;

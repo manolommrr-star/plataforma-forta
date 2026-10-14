@@ -553,7 +553,7 @@ function openDetail(id) {
     //    oficiales.
     var vp = m.votos_partidos || {};
     html += '<div class="detail-section"><h3>Votaciones · Votos por partido</h3>';
-    html += '<div class="chart-hero pie-hero">';
+    html += '<div class="chart-hero pie-hero" data-pie-track>';
     ORDEN_VOTACIONES.forEach(function(et, i) {
         var v = vp[et];
         var cid = 'pie-' + i + '-' + m['numero de municipio'];
@@ -571,7 +571,9 @@ function openDetail(id) {
         }
         html += '</div></div>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    html += '<div class="pie-dots" data-pie-dots><i class="on"></i><i></i><i></i></div>';
+    html += '</div>';
 
     // Genero legible (el Excel trae "F"/"M")
     function generoLabel(g) {
@@ -708,6 +710,26 @@ function openDetail(id) {
     ORDEN_VOTACIONES.forEach(function(et, i) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
+
+    // Carrusel movil: puntitos que siguen la tarjeta visible (solo <=640px)
+    try {
+        var track = content.querySelector('[data-pie-track]');
+        var dotsBox = content.querySelector('[data-pie-dots]');
+        if (track && dotsBox) {
+            var dots = dotsBox.querySelectorAll('i');
+            var paint = function() {
+                var w = track.clientWidth || 1;
+                var idx = Math.round(track.scrollLeft / w);
+                if (idx < 0) idx = 0;
+                if (idx > 2) idx = 2;
+                for (var k = 0; k < dots.length; k++) {
+                    if (dots[k].classList) dots[k].classList.toggle('on', k === idx);
+                }
+            };
+            track.onscroll = paint;
+            paint();
+        }
+    } catch (e) {}
 }
 
 

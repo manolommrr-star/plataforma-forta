@@ -83,6 +83,8 @@ check(d.includes('Vigencia de la estructura'), 'detalle: Vigencia');
   check(d.includes('pie-0-1') && d.includes('pie-1-1') && d.includes('pie-2-1'),
       'graficas: un pastel por votacion (pie-0-1 / pie-1-1 / pie-2-1)');
   check(d.includes('chart-pie'), 'graficas: canvas con clase chart-pie (pastel, no barras)');
+  check(d.includes('data-pie-track') && d.includes('data-pie-dots'),
+    'graficas: carrusel movil con track y puntitos');
   check(d.includes('votos a partidos'), 'graficas: leyenda con "votos a partidos" (denominador del %)');
   ['PAN', 'PRI', 'PRD', 'PVEM', 'PT', 'MC', 'MORENA'].forEach(p =>
       check(d.includes('>' + p + ' <b>'), 'graficas: leyenda incluye ' + p + ' con su %'));
