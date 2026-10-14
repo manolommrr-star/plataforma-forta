@@ -710,66 +710,27 @@ function openDetail(id) {
         renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
     });
 
-    // Carrusel movil (<=640px): LOOP INFINITO real y organico.
-    //
-    // Como no existe scroll nativo "circular", se replica el grupo de graficas
-    // una vez ANTES y otra DESPUES de las reales:  [clones][reales][clones].
-    // Arrancamos posicionados en las reales.
-    //
-    // La animacion NO usa el scroll suave del navegador (ese pelea con el loop y
-    // provoca el "salto"): la hacemos nosotros frame a frame con requestAnimation-
-    // Frame y una curva de easing suave. Al LLEGAR a una zona de clones hacemos el
-    // "teleport" instantaneo a la posicion real equivalente; como ocurre justo al
-    // final, sobre una imagen identica (mismas graficas), el corte es imperceptible
-    // y el loop se siente continuo en ambas direcciones.
-    //
-    // SOLO en telefono: en escritorio las 3 tarjetas van en fila (sin overflow),
-    // asi que aqui no se clona ni se anima nada.
+    // Carrusel movil (<=640px): las graficas se deslizan y se AUTO-CENTRAN solas.
+    // Sencillo, sin clones ni teleports.
+    // - Auto-play: avanza una tarjeta cada 3.2s y, al pasar de la ultima,
+    //   vuelve a la primera. Los puntitos siguen siempre la tarjeta centrada.
+    // - Al tocar se pausa; al soltar el dedo la tarjeta mas cercana se centra
+    //   con una animacion suave (easing). En escritorio van las 3 en fila.
     try {
         var mq = window.matchMedia ? window.matchMedia('(max-width:640px)') : { matches: false };
         var track = content.querySelector('[data-pie-track]');
         var dotsBox = content.querySelector('[data-pie-dots]');
         if (mq.matches && track && dotsBox) {
             var dots = dotsBox.querySelectorAll('i');
-            var originals = track.querySelectorAll('.chart-pie-card');
-            var n = originals.length;
+            var cards = track.querySelectorAll('.chart-pie-card');
+            var n = cards.length;
             if (n && dots.length) {
+                var idx = 0;   // tarjeta actualmente centrada
 
-                // Datos de cada votacion, para redibujar los canvas de los clones.
-                var vp = m.votos_partidos || {};
-                var datos = ORDEN_VOTACIONES.map(function(et) { return vp[et]; });
-
-                // --- 1) Replicar el grupo antes y despues de las reales ---
-                var i, clone;
-                for (i = n - 1; i >= 0; i--) {                 // bloque izquierdo
-                    clone = originals[i].cloneNode(true);
-                    clone.classList.add('pie-clone');
-                    clone.removeAttribute('id');
-                    track.insertBefore(clone, track.firstChild);
-                }
-                for (i = 0; i < n; i++) {                       // bloque derecho
-                    clone = originals[i].cloneNode(true);
-                    clone.classList.add('pie-clone');
-                    clone.removeAttribute('id');
-                    track.appendChild(clone);
-                }
-                // Redibujar los pasteles de todos los clones (los <canvas> vienen
-                // en blanco al clonar y no tienen id).
-                var clones = track.querySelectorAll('.pie-clone');
-                Array.prototype.forEach.call(clones, function(cl, c) {
-                    var cv = cl.querySelector('canvas.chart-pie');
-                    if (cv) drawPie(cv, datos[c % n]);
-                });
-
-                var cards = track.querySelectorAll('.chart-pie-card');
-                var total = cards.length;   // 3n
-                var idx = n;                // arranca en la primera real
-
-                // --- 2) Posicion (centro de tarjeta <-> centro del viewport) ---
-                // Centro en pixeles de scroll que deja la tarjeta k centrada.
+                // Centro en px de scroll que deja la tarjeta k centrada.
                 var centerOf = function(k) {
                     if (k < 0) k = 0;
-                    if (k > total - 1) k = total - 1;
+                    if (k > n - 1) k = n - 1;
                     var tb = track.getBoundingClientRect();
                     var cb = cards[k].getBoundingClientRect();
                     var target = (cb.left - tb.left + track.scrollLeft) + cb.width / 2 - track.clientWidth / 2;
@@ -778,39 +739,30 @@ function openDetail(id) {
                     if (target > max) target = max;
                     return target;
                 };
-                // Tarjeta (0..total-1) cuyo centro queda mas centrado ahora.
+                // Tarjeta (0..n-1) cuyo centro queda mas centrado ahora.
                 var nearestIndex = function() {
                     var tb = track.getBoundingClientRect();
                     var center = tb.left + tb.width / 2;
                     var best = 0, bestD = Infinity;
-                    for (var k = 0; k < total; k++) {
+                    for (var k = 0; k < n; k++) {
                         var cb = cards[k].getBoundingClientRect();
                         var d = Math.abs((cb.left + cb.width / 2) - center);
                         if (d < bestD) { bestD = d; best = k; }
                     }
                     return best;
                 };
-                // Indice real (0..n-1) de una posicion cualquiera, para los dots.
-                var realOf = function(pos) { return ((pos % n) + n) % n; };
 
-                // --- 3) Motor de animacion propio (rAF + easing) ---
+                // --- 3) Motor de animacion (rAF + easing easeInOutCubic) ---
                 var rafId = 0;
                 var anim = null;   // {from,to,t0,dur} mientras anima
-                var EASE = function(p) { // easeInOutCubic: arranca y frena suave
+                var EASE = function(p) { // arranca y frena suave
                     return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
                 };
                 var paint = function() {
-                    var r = realOf(nearestIndex());
-                    for (var j = 0; j < dots.length; j++) {
-                        if (dots[j].classList) dots[j].classList.toggle('on', j === r);
-                    }
-                };
-                // Ajusta la posicion a la zona real (teleport imperceptible).
-                // Se llama SOLO cuando no hay animacion en curso.
-                var rewrap = function() {
                     idx = nearestIndex();
-                    if (idx < n) { idx += n; track.scrollLeft = centerOf(idx); }
-                    else if (idx >= 2 * n) { idx -= n; track.scrollLeft = centerOf(idx); }
+                    for (var j = 0; j < dots.length; j++) {
+                        if (dots[j].classList) dots[j].classList.toggle('on', j === idx);
+                    }
                 };
                 var frame = function(t) {
                     if (!anim) return;
@@ -818,59 +770,57 @@ function openDetail(id) {
                     var p = Math.min((t - anim.t0) / anim.dur, 1);
                     track.scrollLeft = anim.from + (anim.to - anim.from) * EASE(p);
                     paint();
-                    if (p < 1) {
-                        rafId = requestAnimationFrame(frame);
-                    } else {
-                        // Fin de la animacion: ahora si, teleport si hace falta.
-                        anim = null;
-                        rewrap();
-                        paint();
-                    }
+                    if (p < 1) rafId = requestAnimationFrame(frame);
+                    else anim = null;
                 };
                 var goTo = function(k) {
                     if (k < 0) k = 0;
-                    if (k > total - 1) k = total - 1;
+                    if (k > n - 1) k = n - 1;
                     if (rafId) cancelAnimationFrame(rafId);
                     anim = { from: track.scrollLeft, to: centerOf(k), t0: 0, dur: 620 };
                     rafId = requestAnimationFrame(frame);
                 };
-                // Coloca una tarjeta centrada sin animacion (arranque / resize).
-                var jumpTo = function(k) {
-                    if (rafId) cancelAnimationFrame(rafId);
-                    anim = null;
-                    idx = k;
-                    track.scrollLeft = centerOf(k);
-                    paint();
-                };
 
-                // --- 4) Auto-play cada 3.2s, con pausa al tocar ---
-                var autoId = 0, paused = false, dragging = false;
+                // --- 4) Auto-play: avanza y, tras la ultima, vuelve a la primera ---
+                var autoId = 0, paused = false, dragging = false, snapT = 0;
                 var stopAuto = function() { if (autoId) { clearInterval(autoId); autoId = 0; } };
-                var step = function(dir) {
-                    var from = nearestIndex();
-                    goTo(from + dir);
-                };
+                var step = function() { goTo(idx + 1 > n - 1 ? 0 : idx + 1); };
                 var startAuto = function() {
                     stopAuto();
-                    if (!paused) autoId = setInterval(function() { if (!dragging) step(1); }, 3200);
+                    if (!paused) autoId = setInterval(function() { if (!dragging) step(); }, 3200);
+                };
+                // Centra la tarjeta mas cercana cuando el dedo ya no se mueve.
+                var scheduleSnap = function() {
+                    clearTimeout(snapT);
+                    snapT = setTimeout(function() { if (!dragging) goTo(nearestIndex()); }, 140);
                 };
 
                 // --- 5) Interaccion del usuario ---
-                track.addEventListener('pointerdown', function() { dragging = true; paused = true; stopAuto(); if (rafId) cancelAnimationFrame(rafId); anim = null; });
-                track.addEventListener('pointerup',   function() { dragging = false; paused = false; rewrap(); paint(); startAuto(); });
+                // Toque: pausa el auto-play y cancela la animacion en curso.
+                track.addEventListener('pointerdown', function() {
+                    dragging = true; paused = true; stopAuto();
+                    if (rafId) cancelAnimationFrame(rafId); anim = null; clearTimeout(snapT);
+                });
+                // Al soltar: auto-centra la tarjeta mas cercana y reanuda.
+                track.addEventListener('pointerup', function() {
+                    dragging = false; paused = false;
+                    goTo(nearestIndex());
+                    startAuto();
+                });
                 track.addEventListener('pointercancel', function() { dragging = true; paused = true; stopAuto(); });
 
-                // Durante el arrastre solo actualizamos los dots; el teleport se
-                // hace al soltar (pointerup), cuando el dedo ya no interfiere.
+                // Mientras se desliza a mano sigue los puntitos y, al detenerse,
+                // auto-centra (solo si no hay animacion del auto-play en curso).
                 track.addEventListener('scroll', function() {
                     if (rafId) cancelAnimationFrame(rafId);
                     rafId = requestAnimationFrame(paint);
+                    if (!anim) scheduleSnap();
                 }, { passive: true });
 
-                window.addEventListener('resize', function() { jumpTo(nearestIndex()); });
+                window.addEventListener('resize', function() { goTo(nearestIndex()); });
 
-                // Arranque en la primera grafica real.
-                jumpTo(n);
+                // Arranque en la primera grafica.
+                goTo(0);
                 startAuto();
             }
         }
@@ -898,15 +848,8 @@ var PARTIDO_COLOR = {
 // calcula cada rebanada como votos/total, o sea el mismo % de la leyenda.
 function renderDetailPie(canvasId, data) {
     if (!window.Chart) return;
-    drawPie(document.getElementById(canvasId), data);
-}
-
-// Dibuja el pastel en un canvas ya presente en el DOM. Vive separada de
-// renderDetailPie para poder redibujar tambien los clones del carrusel
-// (esos canvas no tienen id, se localizan por elemento).
-function drawPie(canvas, data) {
-    if (!window.Chart || !canvas) return;
-    if (!data || !data.barras || !data.barras.length) return;
+    var canvas = document.getElementById(canvasId);
+    if (!canvas || !data || !data.barras || !data.barras.length) return;
     var barras = data.barras.slice().sort(function(a, b) { return b.votos - a.votos; });
     var ctx = canvas.getContext('2d');
     new Chart(ctx, {
