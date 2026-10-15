@@ -349,10 +349,17 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   padding:10px;
   box-shadow:var(--shadow);
 }
-.list-search-bar .search-box{flex:1 1 220px;position:relative}
+.list-search-bar .search-box{flex:1 1 220px;position:relative;min-width:0}
 .list-search-bar .search-box input{min-height:44px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px 10px 36px;font-size:14px;color:var(--text-primary);outline:none;transition:var(--transition);width:100%}
 .list-search-bar .search-box input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,63,135,.12);background:#fff}
 .list-search-bar .search-box i,.list-search-bar .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--accent);width:16px;height:16px;pointer-events:none}
+/* En celular los dos buscadores van lado a lado (no apilados) */
+@media(max-width:640px){
+  .list-search-bar{flex-wrap:nowrap;gap:8px;padding:8px}
+  .list-search-bar .search-box{flex:1 1 0;min-width:0}
+  .list-search-bar .search-box input{min-height:40px;font-size:13px;padding:8px 8px 8px 32px}
+  .list-search-bar .search-box input::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
 
 /* Botón exportar dentro del menú lateral (drawer) */
 .drawer-export-btn{
@@ -1031,11 +1038,11 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 
             <div class="list-search-bar">
                 <div class="search-box">
-                    <input type="text" id="table-search" placeholder="Búsqueda general: número, distrito, zona, soldados, votos...">
+                    <input type="text" id="table-search" placeholder="Búsqueda general...">
                     <i data-lucide="search" style="width:16px;height:16px;"></i>
                 </div>
                 <div class="search-box">
-                    <input type="text" id="person-search" placeholder="Buscar municipios o personas: nombre, coordinador, presidente, secretario, regidor, consejero, candidato...">
+                    <input type="text" id="person-search" placeholder="Municipios o personas...">
                     <i data-lucide="user-search" style="width:16px;height:16px;"></i>
                 </div>
             </div>
