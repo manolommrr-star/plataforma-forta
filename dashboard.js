@@ -214,6 +214,7 @@ function getTableKeys() {
 }
 
 var tableSearchTerm = '';
+var personSearchTerm = '';
 var visibleCount = 20;
 
 // Normaliza texto: minúsculas + sin acentos (búsqueda tolerante)
@@ -347,6 +348,45 @@ function matchesGlobalSearch(m, term) {
     return tokens.every(function(token) { return valueMatches(m, token); });
 }
 
+// Busqueda de nombres: solo municipio + personas.
+// Revisa nombre del municipio, coordinador de zona, presidente y secretario
+// (nombre, telefono), regidores del PAN, consejero estatal y los candidatos
+// tras el guion de (PP) diputado local/federal y (PP) presidente municipal.
+// Los terminos separados por espacio deben coincidir TODOS (AND) dentro del
+// MISMO campo de persona ("garcia lopez" encuentra "JUAN GARCIA LOPEZ").
+function matchesNamesSearch(m, term) {
+    if (!term) return true;
+    var tokens = normText(term).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+
+    // De "MORENA - VERDE - PT - Tania Maria Cruz Mejia" saca el nombre del
+    // candidato (lo que va tras el ultimo guion); si no hay guion, todo.
+    function candidateName(v) {
+        var s = String(v == null ? '' : v);
+        var i = s.lastIndexOf('-');
+        return (i >= 0 ? s.slice(i + 1) : s).trim();
+    }
+
+    var fields = [
+        m.municipio,
+        m.coordinador_zona,
+        m.presidente_estructura,
+        m.presidente_telefono,
+        m.secretario_general,
+        m.secretario_telefono,
+        m.regidores_pan,
+        m.consejero_estatal,
+        candidateName(m.pp_diputado_local),
+        candidateName(m.pp_diputado_federal),
+        candidateName(m.pp_presidente_municipal)
+    ];
+
+    var hay = fields.map(function(f) { return normText(f || ''); });
+    return hay.some(function(h) {
+        return tokens.every(function(token) { return h.indexOf(token) >= 0; });
+    });
+}
+
 function escapeHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -359,7 +399,7 @@ function renderList() {
     var listEl = document.getElementById('muni-list');
     var loadBtn = document.getElementById('load-more-btn');
     listEl.innerHTML = '';
-    var data = filteredData.filter(function(m) { return matchesGlobalSearch(m, tableSearchTerm); });
+    var data = filteredData.filter(function(m) { return matchesGlobalSearch(m, tableSearchTerm) && matchesNamesSearch(m, personSearchTerm); });
 
     if (data.length === 0) {
         listEl.innerHTML = '<div class="list-empty">No se encontraron municipios con los criterios seleccionados.</div>';
@@ -388,7 +428,10 @@ function renderList() {
     }
     var countLabel = document.getElementById('subtitle');
     if (countLabel) {
-        setSubtitle(data.length + ' municipios' + (tableSearchTerm ? ' (búsqueda: "' + tableSearchTerm + '")' : '') + ' · ' + allData.length + ' totales');
+        var busca = [];
+        if (tableSearchTerm) busca.push('general: "' + tableSearchTerm + '"');
+        if (personSearchTerm) busca.push('nombres: "' + personSearchTerm + '"');
+        setSubtitle(data.length + ' municipios' + (busca.length ? ' (búsqueda ' + busca.join(' + ') + ')' : '') + ' · ' + allData.length + ' totales');
     }
     try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 }
@@ -919,9 +962,16 @@ document.getElementById('load-more-btn').addEventListener('click', function() {
     renderList();
 });
 
-// Busqueda global (lista)
+// Busqueda general (lista): revisa todos los campos de cada municipio
 document.getElementById('table-search').addEventListener('input', function(e) {
     tableSearchTerm = e.target.value.toLowerCase().trim();
+    visibleCount = 20;
+    renderList();
+});
+
+// Busqueda de nombres (lista): solo municipios y personas
+document.getElementById('person-search').addEventListener('input', function(e) {
+    personSearchTerm = e.target.value.toLowerCase().trim();
     visibleCount = 20;
     renderList();
 });

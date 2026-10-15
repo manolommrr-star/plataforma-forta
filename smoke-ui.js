@@ -53,6 +53,11 @@ check(/muni-card__badge (b-cdm|b-dm|b-co|b-x|none)/.test(c0), 'badge con clase v
 check(c0.includes('muni-card__name'), 'tarjeta muestra el nombre del municipio');
 check(c0.includes('muni-card__districts') && /DL:.*DF:/.test(c0), 'tarjeta muestra DL y DF (estado de estructura)');
 check(!c0.includes('muni-card__meta') && !c0.includes('Zona:') && !c0.includes('Soldados:'), 'tarjeta compacta: sin metricas extra (Zona/Soldados/Nominal/etc.)');
+// Doble buscador: ids general + nombres presentes, y el matcher de nombres existe
+const hasGeneral = html.indexOf('id="table-search"') >= 0;
+const hasNames = html.indexOf('id="person-search"') >= 0;
+check(hasGeneral && hasNames, 'doble buscador: ids table-search y person-search presentes');
+check(js.indexOf('matchesNamesSearch') >= 0 && js.indexOf('personSearchTerm') >= 0, 'doble buscador: matcher de nombres y termino personSearchTerm presentes');
 
 api.openDetail(1);
 const d = byId['detail-content'].innerHTML;
