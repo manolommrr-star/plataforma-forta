@@ -1,5 +1,5 @@
-// smoke-ui.js — PRUEBA TEMPORAL: ejecuta dashboard.js con un DOM simulado y
-// verifica que tarjetas y detalle se rendericen con los datos nuevos.
+// smoke-ui.js — ejecuta dashboard.js con un DOM simulado y datos de
+// data/municipios.json (UNICA fuente) y verifica tarjetas y detalle.
 const fs = require('fs');
 const path = require('path');
 
@@ -31,13 +31,16 @@ const window = { addEventListener() {}, matchMedia: () => ({ matches: false, add
 const alert = () => {};
 
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-byId['municipios-data'] = el('municipios-data');
-byId['municipios-data'].textContent = html.split('<script type="application/json" id="municipios-data">')[1].split('</script>')[0];
+if (html.includes('id="municipios-data"')) { console.log(' FAIL index.html aún trae datos embebidos'); process.exit(1); }
+// UNICA fuente: data/municipios.json (lo mismo que fetch() carga en el navegador)
+const dataJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'municipios.json'), 'utf8'));
+const fakeFetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(dataJson) });
 
 const js = fs.readFileSync(path.join(__dirname, 'dashboard.js'), 'utf8');
-const run = new Function('document', 'window', 'alert', 'location', 'URL', 'Blob',
-  js + '\n;return { allData: () => allData, filteredData: () => filteredData, openDetail, renderList, tableSearch: () => tableSearchTerm, search: term => allData.filter(m => matchesGlobalSearch(m, term)) };');
-const api = run(document, window, alert, { href: '' }, { createObjectURL: () => '', revokeObjectURL: () => {} }, function () {});
+const run = new Function('document', 'window', 'alert', 'location', 'URL', 'Blob', 'fetch', 'seedData',
+  js + '\n;initData(seedData);\n' +
+  'return { allData: () => allData, filteredData: () => filteredData, openDetail, renderList, tableSearch: () => tableSearchTerm, search: term => allData.filter(m => matchesGlobalSearch(m, term)) };');
+const api = run(document, window, alert, { href: '' }, { createObjectURL: () => '', revokeObjectURL: () => {} }, function () {}, fakeFetch, dataJson);
 
 let fallos = 0;
 const ok = m => console.log('  OK  ' + m);

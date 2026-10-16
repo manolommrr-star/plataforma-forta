@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso — Plataforma Fortalecimiento Interno</title>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.475.0/dist/lucide.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-body">
+    <main class="login-wrap">
+        <section class="login-card" aria-labelledby="login-title">
+            <div class="login-brand">
+                <i data-lucide="shield-flag" class="login-brand__icon"></i>
+                <p class="login-brand__kicker">Plataforma &mdash; Fortalecimiento Interno</p>
+                <h1 id="login-title">Iniciar sesión</h1>
+                <p class="login-brand__sub">Acceso restringido. Usa tu usuario y contraseña.</p>
+            </div>
+            <form id="login-form" autocomplete="off" novalidate>
+                <label class="login-field">
+                    <span>Usuario</span>
+                    <div class="login-input">
+                        <i data-lucide="user"></i>
+                        <input type="text" id="login-user" name="usuario" placeholder="Ej. admin" required autofocus>
+                    </div>
+                </label>
+                <label class="login-field">
+                    <span>Contraseña</span>
+                    <div class="login-input">
+                        <i data-lucide="lock"></i>
+                        <input type="password" id="login-pass" name="password" placeholder="••••••••" required>
+                        <button type="button" id="login-toggle" aria-label="Mostrar contraseña">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
+                </label>
+                <p class="login-error" id="login-error" role="alert" hidden></p>
+                <button type="submit" class="login-submit" id="login-submit">
+                    <i data-lucide="log-in"></i><span>Entrar</span>
+                </button>
+                <p class="login-hint">¿Olvidaste tu acceso? Pide a un administrador que genere tu contraseña con <code>node tools/hash-password.js</code>.</p>
+            </form>
+        </section>
+    </main>
+    <script src="login.js" defer></script>
+</body>
+</html>

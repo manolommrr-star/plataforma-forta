@@ -1,7 +1,7 @@
 /* ==========================================================================
    Dashboard.js — Panel de Fortalecimiento Interno
    Todas las funciones interactivas del dashboard.
-   Los datos vienen embebidos en el HTML como <script type="application/json">.
+   Los datos se cargan SOLO desde data/municipios.json via fetch.
    ========================================================================== */
 
 let allData = [];
@@ -19,15 +19,10 @@ function setSubtitle(text) {
     if (el) el.textContent = text;
 }
 
-// Cargar datos desde el script JSON embebido en el HTML
-function loadData() {
-    const dataEl = document.getElementById('municipios-data');
-    if (!dataEl) {
-        setSubtitle('ERROR: No se encontraron datos.');
-        return;
-    }
-    try {
-        allData = JSON.parse(dataEl.textContent);
+// Cargar datos SOLO desde data/municipios.json via fetch.
+// Requiere servirse por http(s) (ej. npx serve .). No funciona con file:// por CORS.
+function initData(data) {
+    allData = data;
 
         // Inicializar secciones extensibles
         allData.forEach(m => {
@@ -39,9 +34,17 @@ function loadData() {
         setSubtitle(allData.length + ' municipios cargados · Panel de Fortalecimiento Interno');
         initFilters();
         applyFilters();
+}
+
+async function loadData() {
+    setSubtitle('Cargando municipios...');
+    try {
+        const res = await fetch('data/municipios.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' al cargar data/municipios.json');
+        initData(await res.json());
     } catch(err) {
-        console.error('Error parseando datos:', err);
-        setSubtitle('ERROR cargando datos.');
+        console.error('Error cargando datos:', err);
+        setSubtitle('ERROR cargando data/municipios.json. Sirve la carpeta por http (ej. npx serve .) — file:// bloquea fetch por CORS.');
     }
 }
 
@@ -1169,6 +1172,24 @@ function downloadBlob(blob, filename) {
 // (el document click handler se registra dentro de cada multi-select para evitar
 //  que cierre el menú al interactuar dentro del mismo)
 (function() {
+    // Sesión: pinta usuario/rol, botón salir y permisos por rol.
+    // El guardia auth.js ya redirigió al login si no hay sesión.
+    try {
+        var session = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+        if (session) {
+            var nameEl = document.getElementById('user-chip-name');
+            var rolEl = document.getElementById('user-chip-rol');
+            if (nameEl) nameEl.textContent = session.nombre || session.usuario;
+            if (rolEl) rolEl.textContent = session.rol || '';
+            var exitBtn = document.getElementById('logout-btn');
+            if (exitBtn) exitBtn.addEventListener('click', function() { fortaLogout(); });
+            // Rol consulta: sin exportar (se oculta el botón del drawer).
+            if (typeof fortaCanExport === 'function' && !fortaCanExport(session.rol)) {
+                var expBtn = document.getElementById('export-excel-btn');
+                if (expBtn) expBtn.style.display = 'none';
+            }
+        }
+    } catch (e) { console.error('session UI:', e); }
     // Drawer de filtros: abre/cierra el cajon lateral
     var sidebar = document.getElementById('filters-sidebar');
     var toggle = document.getElementById('menu-toggle');

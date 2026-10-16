@@ -1,8 +1,9 @@
 // verify.js — Verificación de integridad de la plataforma (Node.js)
 // Uso: node verify.js          (después de node build-data.js)
-// Comprueba: JSON embebido + data/municipios.json, esquema de 40 campos,
-// tipos, fechas, teléfonos, estatus reconocibles, numeración 1-212,
-// etiquetas de exportación, balance de CSS/DIVs y sintaxis del JS.
+// Comprueba: data/municipios.json (UNICA fuente; index.html ya no lleva datos
+// embebidos), esquema de 40 campos, tipos, fechas, teléfonos, estatus
+// reconocibles, numeración 1-212, etiquetas de exportación, balance de
+// CSS/DIVs y sintaxis del JS.
 
 const fs = require('fs');
 const path = require('path');
@@ -14,31 +15,70 @@ const ok = (msg) => console.log('  OK  ' + msg);
 const warn = (msg) => { warnings++; console.log(' AVISO ' + msg); };
 const fail = (msg) => { failures++; console.log(' FAIL ' + msg); };
 
-// ---------- 1. index.html ----------
-console.log('\n[1] index.html');
+// ---------- 1. index.html (estructura; CSS en styles.css, datos en JSON) ----------
+console.log('\n[1] index.html + styles.css');
 const html = fs.readFileSync(path.join(BASE, 'index.html'), 'utf8');
 
-const startTag = '<script type="application/json" id="municipios-data">';
-const i = html.indexOf(startTag);
-const j = html.indexOf('</script>', i);
-let embedded = null;
-if (i < 0 || j < 0) {
-  fail('bloque JSON embebido no encontrado');
+if (html.includes('id="municipios-data"')) {
+  fail('index.html aún contiene el bloque JSON embebido (debe cargarse solo desde data/municipios.json)');
 } else {
-  try {
-    embedded = JSON.parse(html.slice(i + startTag.length, j));
-    ok('JSON embebido: sintaxis válida');
-  } catch (e) {
-    fail('JSON embebido: ' + e.message);
+  ok('sin datos embebidos: los datos se cargan solo desde data/municipios.json');
+}
+if (!html.includes('data/municipios.json')) warn('index.html no menciona data/municipios.json en comentarios');
+else ok('index.html referencia data/municipios.json');
+if (!html.includes('dashboard.js')) fail('index.html no carga dashboard.js');
+else ok('index.html carga dashboard.js');
+if (html.includes('<style>')) fail('index.html aún trae CSS embebido (debe estar solo en styles.css)');
+else ok('sin CSS embebido: estilos solo en styles.css');
+if (!html.includes('styles.css')) fail('index.html no enlaza styles.css');
+else ok('index.html enlaza styles.css');
+if (!html.includes('auth.js')) fail('index.html no carga auth.js (guardia de sesión)');
+else ok('index.html carga auth.js (guardia de sesión)');
+if (!html.includes('logout-btn') || !html.includes('user-chip-name')) fail('index.html sin chip de usuario + botón salir');
+else ok('index.html muestra usuario/rol + botón salir');
+
+// ---------- 1b. Login (login.html + login.js + auth.js + data/usuarios.json) ----------
+console.log('\n[1b] Login');
+try {
+  const loginHtml = fs.readFileSync(path.join(BASE, 'login.html'), 'utf8');
+  ['login-form', 'login-user', 'login-pass', 'login-submit', 'login.js'].forEach(id => {
+    loginHtml.includes(id) ? ok('login.html contiene ' + id) : fail('login.html sin ' + id);
+  });
+  loginHtml.includes('styles.css') ? ok('login.html reutiliza styles.css') : fail('login.html no enlaza styles.css');
+  const loginJs = fs.readFileSync(path.join(BASE, 'login.js'), 'utf8');
+  new Function(loginJs);
+  ok('login.js sintaxis válida');
+  ['data/usuarios.json', 'password_sha256', 'forta_session', 'index.html'].forEach(s => {
+    loginJs.includes(s) ? ok('login.js usa ' + s) : fail('login.js sin ' + s);
+  });
+  const authJs = fs.readFileSync(path.join(BASE, 'auth.js'), 'utf8');
+  new Function(authJs);
+  ok('auth.js sintaxis válida');
+  ['fortaGetSession', 'fortaLogout', 'fortaCanExport', 'login.html'].forEach(s => {
+    authJs.includes(s) ? ok('auth.js expone ' + s) : fail('auth.js sin ' + s);
+  });
+  const users = JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'usuarios.json'), 'utf8'));
+  if (!users.usuarios || !users.usuarios.length) fail('data/usuarios.json sin usuarios');
+  else {
+    ok('data/usuarios.json: ' + users.usuarios.length + ' usuario(s)');
+    users.usuarios.forEach(u => {
+      (!u.usuario || !u.password_sha256 || !u.rol)
+        ? fail('usuario incompleto: ' + JSON.stringify(u.usuario))
+        : ok('usuario "' + u.usuario + '" rol=' + u.rol + (u.activo === false ? ' (INACTIVO)' : ''));
+      if (u.password_sha256 && !/^[0-9a-f]{64}$/.test(u.password_sha256)) fail('hash inválido para ' + u.usuario + ' (debe ser SHA-256 hex)');
+    });
   }
-  if (embedded) {
-    ok('municipios embebidos: ' + embedded.length);
-    if (embedded.length !== 212) fail('se esperaban 212 municipios');
-    validate(embedded, 'embebido');
-  }
+} catch (e) {
+  fail('archivos de login: ' + e.message);
 }
 
-const css = (html.split('<style>')[1] || '').split('</style>')[0];
+let css = '';
+try {
+  css = fs.readFileSync(path.join(BASE, 'styles.css'), 'utf8');
+  ok('styles.css legible (' + (Buffer.byteLength(css) / 1024).toFixed(1) + ' KB)');
+} catch (e) {
+  fail('no se pudo leer styles.css: ' + e.message);
+}
 const ob = (css.match(/{/g) || []).length;
 const cb = (css.match(/}/g) || []).length;
 ob === cb ? ok('CSS llaves balanceadas: ' + ob) : fail('CSS llaves desbalanceadas: ' + ob + '/' + cb);
@@ -68,7 +108,7 @@ try {
   fail('lectura/parseo: ' + e.message);
 }
 
-// ---------- 3. dashboard.js ----------
+// ---------- 3. dashboard.js (carga SOLO desde data/municipios.json) ----------
 console.log('\n[3] dashboard.js');
 let jsSource = '';
 try {
@@ -80,6 +120,10 @@ try {
   else ok('sin referencias residuales a "id"');
   if (!js.includes("numero de municipio")) fail('no usa la propiedad "numero de municipio"');
   else ok('usa "numero de municipio"');
+  if (js.includes('municipios-data')) fail('dashboard.js aún lee el bloque embebido municipios-data (debe usar solo fetch)');
+  else ok('sin bloque embebido: carga solo via fetch');
+  if (!js.includes('data/municipios.json')) fail('dashboard.js no hace fetch a data/municipios.json');
+  else ok('dashboard.js carga data/municipios.json via fetch');
   // Helpers nuevos que la interfaz necesita para los campos del Excel nuevo
   ['estatusClass', 'estatusShort', 'pctValue', 'formatPct', 'fieldLabel'].forEach(fn => {
     new RegExp('function\\s+' + fn + '\\s*\\(').test(js)
@@ -90,13 +134,9 @@ try {
   fail('dashboard.js: ' + e.message);
 }
 
-// ---------- 4. Consistencia HTML vs archivo ----------
-if (fileData && embedded) {
-  console.log('\n[4] Consistencia');
-  if (fileData.length === embedded.length) ok('mismo número de municipios en ambos archivos');
-  else fail('diferencia de conteo: ' + fileData.length + ' vs ' + embedded.length);
-  if (JSON.stringify(fileData) === JSON.stringify(embedded)) ok('contenido idéntico (mismos valores y orden) en ambos archivos');
-  else fail('el JSON embebido y data/municipios.json difieren: ejecuta "node build-data.js"');
+// ---------- 4. Etiquetas de exportación ----------
+if (fileData) {
+  console.log('\n[4] Etiquetas de exportación');
 
   // Cada campo del Excel debe tener etiqueta legible para exportar a Excel/CSV
   const labelsBlock = (jsSource.match(/var FIELD_LABELS = \{[\s\S]*?\};/) || [''])[0];

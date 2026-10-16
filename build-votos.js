@@ -17,8 +17,9 @@
  *  (1..212; coincide exacto con el panel).
  *
  *  Salidas:
- *      data/votos.json                     estructura por municipio y votacion
- *      data/municipios.json + index.html   campo nuevo "votos_partidos"
+ *      data/votos.json          estructura por municipio y votacion
+ *      data/municipios.json     campo nuevo "votos_partidos" (UNICA fuente;
+ *                               index.html ya no lleva datos embebidos)
  *
  *  El campo "votos_partidos" es un dato ESTRUCTURADO (objeto), por eso no se
  *  exporta al CSV/Excel y se excluye de la validacion de "35 campos" de
@@ -132,11 +133,8 @@ function construirCampo(porReporte) {
 }
 
 // --------------------------------------------- aplicar a la plataforma
-// Inserta el campo "votos_partidos" en data/municipios.json y en el bloque
-// JSON embebido de index.html (misma serializacion que build-data.js).
-// Comprueba los DOS archivos para no dejar uno sin el campo: antes bastaba
-// con que municipios.json ya coincidiera para no tocar index.html, lo que los
-// podia desincronizar.
+// Inserta el campo "votos_partidos" en data/municipios.json (UNICA fuente;
+// index.html ya no lleva datos embebidos).
 function aplicarAPlataforma(campo) {
     const jsonPath = path.join(BASE, 'data', 'municipios.json');
     if (!fs.existsSync(jsonPath)) { console.log('\n(no existe data/municipios.json: nada que actualizar)'); return; }
@@ -151,33 +149,11 @@ function aplicarAPlataforma(campo) {
     });
     if (ausentes.length) console.log('  AVISO municipios sin datos de votos: ' + ausentes.join(', '));
 
+    if (!cambiados) { console.log('\n✔ data/municipios.json: votos_partidos ya coincidía'); return; }
+
     const json = JSON.stringify(municipios, null, 2);
-    if (json.includes('</')) throw new Error('los datos contienen "</": habria que escapar el JSON embebido');
-
-    // ¿index.html ya lleva exactamente este JSON?
-    const htmlPath = path.join(BASE, 'index.html');
-    const tag = '<script type="application/json" id="municipios-data">';
-    let htmlOk = false;
-    if (fs.existsSync(htmlPath)) {
-        const html = fs.readFileSync(htmlPath, 'utf8');
-        const i = html.indexOf(tag), j = html.indexOf('</script>', i);
-        if (i >= 0 && j >= 0) htmlOk = html.slice(i + tag.length, j).trim() === json;
-    }
-
-    if (!cambiados && htmlOk) { console.log('\n✔ data/municipios.json e index.html: votos_partidos ya coincidía'); return; }
-
-    if (cambiados) {
-        fs.writeFileSync(jsonPath, json + '\n', 'utf8');
-        console.log('\n✔ data/municipios.json: votos_partidos actualizado en ' + cambiados + ' municipios');
-    }
-    if (!htmlOk) {
-        if (!fs.existsSync(htmlPath)) return;
-        const html = fs.readFileSync(htmlPath, 'utf8');
-        const i = html.indexOf(tag), j = html.indexOf('</script>', i);
-        if (i < 0 || j < 0) { console.log('  AVISO no se encontro el bloque JSON embebido en index.html'); return; }
-        fs.writeFileSync(htmlPath, html.slice(0, i + tag.length) + '\n' + json + '\n        ' + html.slice(j), 'utf8');
-        console.log('✔ index.html: bloque embebido actualizado con votos_partidos');
-    }
+    fs.writeFileSync(jsonPath, json + '\n', 'utf8');
+    console.log('\n✔ data/municipios.json: votos_partidos actualizado en ' + cambiados + ' municipios');
 }
 
 // ------------------------------------------------------------------- MAIN

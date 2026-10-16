@@ -4,27 +4,58 @@ Dashboard de 212 municipios (Veracruz) con datos del Excel del panel (última
 versión: **`Panel FORTA 30-09-2026.xlsx`**, hoja `Hoja 1`). `build-data.js` toma
 automáticamente el `Panel*.xlsx` **más reciente** de la carpeta.
 
+> **Arquitectura separada:** `login.html` (acceso) → `index.html`
+> (estructura) + `styles.css` (estilos) + `dashboard.js` (lógica) +
+> `data/municipios.json` (datos via `fetch`). Para desarrollo local usa un
+> servidor http (`npx serve .` o `python -m http.server`); abrir con `file://`
+> bloquea `fetch` y el CSS relativo por CORS. En GitHub Pages funciona directo.
+
+## Acceso (login)
+
+Pantalla `login.html` con usuarios y roles en `data/usuarios.json`
+(contraseñas en SHA-256). `auth.js` redirige a `login.html` si no hay sesión
+válida (`sessionStorage`, 8 h). Roles:
+
+| Rol | Permisos |
+|---|---|
+| `admin` | Todo: ver, exportar, gestionar usuarios |
+| `capturista` | Ver municipios y exportar |
+| `consulta` | Solo lectura (botón exportar oculto) |
+
+Usuarios iniciales: `admin` / `admin123` y `consulta` / `consulta123`
+(cambiar tras el primer acceso). Nueva contraseña:
+
+```bat
+node tools/hash-password.js "MiClave123"   :: imprime el SHA-256 para pegar en data/usuarios.json
+```
+
 ## Archivos
 
 | Archivo | Para qué sirve |
 |---|---|
-| `index.html` | Panel autocontenido: CSS + HTML + los 212 registros embebidos como JSON. Se abre con doble clic, sin servidor. Es la página que publica GitHub Pages. |
-| `dashboard.js` | Filtros, búsqueda global, tarjetas, vista de detalle y exportación (descargar o compartir el Excel/CSV por WhatsApp en el teléfono). |
+| `login.html` | Pantalla de acceso (usuario + contraseña). Redirige a `index.html` si ya hay sesión. |
+| `login.js` | Valida contra `data/usuarios.json` (SHA-256 en el navegador) y guarda la sesión. |
+| `auth.js` | Guardia de sesión para `index.html` + permisos por rol (`fortaCanExport`, `fortaCanManageUsers`). |
+| `data/usuarios.json` | Usuarios, roles y hashes SHA-256. |
+| `tools/hash-password.js` | Genera el hash SHA-256 de una contraseña para `data/usuarios.json`. |
+| `index.html` | Solo estructura HTML. Enlaza `styles.css` y carga `auth.js` + `dashboard.js`, que trae los 212 registros via `fetch` desde `data/municipios.json`. Requiere http(s) — no abrir con doble clic. |
+| `styles.css` | Todos los estilos del panel (extraído de `index.html`). |
+| `dashboard.js` | Filtros, búsqueda global, tarjetas, vista de detalle y exportación. Carga `data/municipios.json` via `fetch` (única fuente). |
 | `data/municipios.json` | Datos (36 campos del Excel + `metricas`/`etiquetas`/`metadata` heredados + `votos_partidos`, dato estructurado que no se exporta). |
 | `data/localidades.json` | Lista de localidades por municipio extraída del PEL de casillas (`build-localidades.js`): 212 municipios, 3078 localidades con clave, nombre y manzana. |
 | `data/votos.json` | Votos por partido y municipio calculados desde los 3 reportes del SEE (`build-votos.js`): por votación, una barra por partido con su `%` sobre el total de votos **a partidos**. |
 | `localidades-por-municipio.csv` | La misma lista, una fila por localidad, separador `;` y BOM UTF-8 para Excel en español. |
-| `build-data.js` | **Conversor Excel → JSON.** Lee el `.xlsx` sin dependencias (ZIP + `zlib`) y actualiza `data/municipios.json` y el bloque JSON de `index.html`. Por defecto toma el `Panel*.xlsx` **más reciente** de la carpeta. |
-| `build-localidades.js` | **Conversor PEL → lista de localidades.** Lee el `PEL*.xlsx` más reciente (por defecto `PEL 2024-2025_listadoUbicacionCasillas_JL.xlsx`, hoja `Sheet0`), agrupa la columna K (`clave) NOMBRE [manzana]`) por municipio, genera `data/localidades.json` + `localidades-por-municipio.csv` y **corrige `secciones_detalle`** en `data/municipios.json` y en el bloque embebido de `index.html` (ver sección *Localidades por municipio*). |
-| `build-votos.js` | **Votos por partido desde el SEE.** Lee los 3 listados del SEE (`2025_SEE_AYUN_VER_MUN`, `2024_SEE_DIP_LOC_MR_VER_MUN`, `2024_SEE_DIP_FED_MR_NAL_MUN`), calcula por municipio y votación una barra por partido con su `%` sobre el total de votos **a partidos** (sin coaliciones, ni candidatos independientes, ni nulos) y guarda el campo `votos_partidos` en `data/municipios.json`, `index.html` y `data/votos.json`. Ver sección *Votos por partido*. |
-| `verify.js` | Verificación de integridad (5 secciones). |
-| `smoke-ui.js` | Prueba de renderizado: ejecuta `dashboard.js` con un DOM simulado. |
+| `build-data.js` | **Conversor Excel → JSON.** Lee el `.xlsx` sin dependencias (ZIP + `zlib`) y actualiza `data/municipios.json` (UNICA fuente). Por defecto toma el `Panel*.xlsx` **más reciente** de la carpeta. |
+| `build-localidades.js` | **Conversor PEL → lista de localidades.** Lee el `PEL*.xlsx` más reciente, agrupa la columna K (`clave) NOMBRE [manzana]`) por municipio, genera `data/localidades.json` (+ CSV derivado) y **corrige `secciones_detalle`** en `data/municipios.json` (ver sección *Localidades por municipio*). |
+| `build-votos.js` | **Votos por partido desde el SEE.** Lee los 3 listados del SEE (`2025_SEE_AYUN_VER_MUN`, `2024_SEE_DIP_LOC_MR_VER_MUN`, `2024_SEE_DIP_FED_MR_NAL_MUN`), calcula por municipio y votación una barra por partido con su `%` sobre el total de votos **a partidos** (sin coaliciones, ni candidatos independientes, ni nulos) y guarda el campo `votos_partidos` en `data/municipios.json` y `data/votos.json`. Ver sección *Votos por partido*. |
+| `verify.js` | Verificación de integridad (5 secciones; comprueba que `index.html` NO lleve datos embebidos). |
+| `smoke-ui.js` | Prueba de renderizado: ejecuta `dashboard.js` con un DOM simulado + `data/municipios.json`. |
 | `inspect-xlsx.js` | **Radiografía de un Excel nuevo**: hojas que trae, columna por columna (título real, campo del JSON, filas con dato, formato, valor descartado) y diferencias contra `data/municipios.json`. Útil cada vez que llega una versión nueva del panel. |
 
 ## Comandos
 
 ```bat
-node build-data.js            :: regenera datos + HTML embebido desde el Excel
+node build-data.js            :: regenera data/municipios.json desde el Excel
 node build-data.js --check    :: solo valida el Excel, no escribe nada
 node build-data.js "Otro.xlsx":: usa otra fuente
 node build-localidades.js      :: lista de localidades desde el PEL + corrige secciones_detalle
@@ -106,8 +137,8 @@ Panel traía la lista **corrimida** en 199 de 212 municipios (el municipio N
 lista las localidades de otro, p. ej. el mun 7 listaba las de BENITO JUAREZ),
 aunque los totales globales coincidían (3078 = 3078): era un corrimiento del
 dato del Panel, no localidades de más o de menos. `build-localidades.js`
-sustituye ese valor por la lista del PEL en `data/municipios.json` y en el
-bloque embebido de `index.html` (13-10-2026: 199 municipios corregidos, el
+sustituye ese valor por la lista del PEL en `data/municipios.json`
+(13-10-2026: 199 municipios corregidos, el cruce contra el PEL queda
 cruce contra el PEL queda IDÉNTICO) y `build-data.js` vuelve a aplicar la
 misma corrección cada vez que regenera desde un Excel del Panel, así que no
 se pierde en el siguiente build. Orden:

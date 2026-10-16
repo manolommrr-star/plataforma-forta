@@ -1,5 +1,6 @@
-// build-data.js — Regenera data/municipios.json y el bloque JSON embebido en
-// index.html a partir del Excel del Panel de Fortalecimiento Interno.
+// build-data.js — Regenera data/municipios.json (UNICA fuente de datos)
+// a partir del Excel del Panel de Fortalecimiento Interno. index.html ya NO
+// lleva datos embebidos: dashboard.js los carga via fetch desde el JSON.
 //
 // SIN DEPENDENCIAS: lee el .xlsx (que es un ZIP) con el zlib de Node y parsea el
 // XML de la hoja directamente. Uso:
@@ -538,8 +539,8 @@ function main() {
     });
 
     // secciones_detalle se corrige con la lista del PEL antes de validar y
-    // escribir, para que la correccion quede tanto en data/municipios.json
-    // como en el bloque JSON embebido en index.html.
+    // escribir, para que la correccion quede en data/municipios.json
+    // (UNICA fuente; index.html ya no lleva datos embebidos).
     const locPel = aplicarLocalidadesPel(records);
     if (locPel.aplicados) {
         console.log('Localidades: secciones_detalle tomado de data/localidades.json (reporte del INE):');
@@ -554,20 +555,12 @@ function main() {
     if (CHECK_ONLY) { console.log('\n(--check) No se escribio ningun archivo.'); return; }
 
     const json = JSON.stringify(records, null, 2);
-    if (json.includes('</')) throw new Error('los datos contienen "</": habria que escapar el JSON embebido');
 
     const outJson = path.join(BASE, 'data', 'municipios.json');
     fs.mkdirSync(path.dirname(outJson), { recursive: true });
     fs.writeFileSync(outJson, json + '\n', 'utf8');
     console.log('\n✔ data/municipios.json (' + (Buffer.byteLength(json) / 1024).toFixed(1) + ' KB)');
-
-    const htmlPath = path.join(BASE, 'index.html');
-    const tag = '<script type="application/json" id="municipios-data">';
-    const html = fs.readFileSync(htmlPath, 'utf8');
-    const i = html.indexOf(tag), j = html.indexOf('</script>', i);
-    if (i < 0 || j < 0) throw new Error('no se encontró el bloque JSON embebido en index.html');
-    fs.writeFileSync(htmlPath, html.slice(0, i + tag.length) + '\n' + json + '\n        ' + html.slice(j), 'utf8');
-    console.log('✔ index.html: bloque embebido reemplazado');
+    console.log('(index.html ya no lleva datos embebidos: se cargan via fetch desde el JSON)');
     console.log('\nSiguiente paso: node verify.js');
 }
 

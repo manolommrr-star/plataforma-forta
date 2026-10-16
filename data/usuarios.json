@@ -1,0 +1,31 @@
+{
+  "nota": "Usuarios del Panel FORTA. Las contraseñas van en SHA-256 (generar con node tools/hash-password.js \"MiClave123\"). Claves iniciales: admin/admin123 y consulta/consulta123. Cambiarlas tras el primer acceso.",
+  "roles": {
+    "admin": "Acceso total: ve todo, exporta, gestiona usuarios",
+    "capturista": "Ve municipios y exporta, sin gestionar usuarios",
+    "consulta": "Solo lectura, sin exportar"
+  },
+  "usuarios": [
+    {
+      "usuario": "admin",
+      "nombre": "Administrador",
+      "rol": "admin",
+      "password_sha256": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "activo": true
+    },
+    {
+      "usuario": "consulta",
+      "nombre": "Usuario de consulta",
+      "rol": "consulta",
+      "password_sha256": "7fa95c704c2defa7b1295d28bcddfd752bf9b594db18886dd64721183cfc47a5",
+      "activo": true
+    },
+    {
+      "usuario": "gabo",
+      "nombre": "Gabo",
+      "rol": "admin",
+      "password_sha256": "ba4d0b144b31cf2774ae66c495fb76e020e1e1a379d6e1d982e4153999edb610",
+      "activo": true
+    }
+  ]
+}

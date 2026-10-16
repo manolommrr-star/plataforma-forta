@@ -18,10 +18,8 @@
  *      localidades-por-municipio.csv una fila por localidad, separador ";"
  *
  *  Y APLICA la lista a la plataforma: corrige secciones_detalle en
- *  data/municipios.json y en el bloque JSON embebido de index.html, que el
- *  Panel trae corrimido en 199 de 212 municipios (el municipio N lista las
- *  localidades de otro). La corrección usa el mismo formato y la misma
- *  serialización que build-data.js, así que el resto de campos queda igual;
+ *  data/municipios.json (UNICA fuente; index.html ya no lleva datos
+ *  embebidos), que el Panel trae corrimido en 199 de 212 municipios
  *  build-data.js, además, re-aplica la lista cada vez que regenera desde un
  *  Excel del Panel.
  *
@@ -227,11 +225,9 @@ function imprimirDiferencias(difs, max) {
 }
 
 // ------------------------------------------------- APLICAR A LA PLATAFORMA
-// Sustituye secciones_detalle en data/municipios.json y en el bloque JSON
-// embebido en index.html por la lista del PEL. Usa el mismo formato
-// ("1. ACAJETE | 9. LA JOYA | ...") y la misma serialización que
-// build-data.js (JSON con 2 espacios de sangría + newline), de modo que el
-// resto de campos del Panel queda intacto. Solo escribe si algo cambió.
+// Sustituye secciones_detalle en data/municipios.json (UNICA fuente;
+// index.html ya no lleva datos embebidos) por la lista del PEL. Usa el mismo
+// formato ("1. ACAJETE | 9. LA JOYA | ..."). Solo escribe si algo cambió.
 function aplicarAPlataforma(porNum) {
     const jsonPath = path.join(BASE, 'data', 'municipios.json');
     if (!fs.existsSync(jsonPath)) {
@@ -253,19 +249,9 @@ function aplicarAPlataforma(porNum) {
     if (!cambiados) { console.log('\n✔ data/municipios.json: secciones_detalle ya coincidía con el PEL'); return; }
 
     const json = JSON.stringify(municipios, null, 2);
-    if (json.includes('</')) throw new Error('los datos contienen "</": habría que escapar el JSON embebido');
     fs.writeFileSync(jsonPath, json + '\n', 'utf8');
     console.log('\n✔ data/municipios.json: secciones_detalle corregido en ' +
         aplicados + ' municipios (' + cambiados + ' cambiaron respecto al Panel)');
-
-    const htmlPath = path.join(BASE, 'index.html');
-    if (!fs.existsSync(htmlPath)) return;
-    const tag = '<script type="application/json" id="municipios-data">';
-    const html = fs.readFileSync(htmlPath, 'utf8');
-    const i = html.indexOf(tag), j = html.indexOf('</script>', i);
-    if (i < 0 || j < 0) { console.log('  AVISO no se encontró el bloque JSON embebido en index.html'); return; }
-    fs.writeFileSync(htmlPath, html.slice(0, i + tag.length) + '\n' + json + '\n        ' + html.slice(j), 'utf8');
-    console.log('✔ index.html: bloque embebido actualizado con la lista del PEL');
 }
 
 // Cruce informativo: PEL vs. lo que la plataforma muestra ahora

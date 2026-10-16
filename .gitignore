@@ -1,14 +1,11 @@
-# Excels fuente (contienen datos sensibles: telefonos). No se suben.
-# Los datos ya van generados en data/municipios.json + dashboard.html
+﻿# Excels fuente (contienen datos sensibles: telefonos). No se suben.
+# Los datos ya van generados en data/municipios.json
 *.xlsx
 ~$*.xlsx
 *.xls
 
-# Scripts y txt de analisis temporal (no son parte del panel)
-analyze-pct*.js
-pct*.txt
-tmp-*
-
+# CSV derivado de localidades (se regenera con build-localidades.js)
+localidades-por-municipio.csv
 
 # Temporales de Office / sistema
 ~$*
