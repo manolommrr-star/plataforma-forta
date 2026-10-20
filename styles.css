@@ -947,19 +947,21 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
 /* ===== Barra superior compacta en móvil: botones solo-icono para que
    el título "Plataforma Forta" sí se lea ===== */
 @media(max-width:767px){
-  .top-bar{gap:4px;padding:4px 6px;min-height:36px}
-  .top-bar__left{gap:4px}
-  .top-bar__left > i{width:13px;height:13px}
-  .top-bar h2{font-size:12px}
+  .top-bar{gap:4px !important;padding:4px 6px !important;min-height:36px !important}
+  .top-bar__left{gap:4px !important}
+  .top-bar__left > i{width:13px !important;height:13px !important}
+  .top-bar h2{font-size:12px !important}
   /* Filtros / Exportar: círculo pequeño solo con icono */
-  .filter-btn{height:26px;width:26px;padding:0;font-size:0;gap:0;justify-content:center;border-radius:50%}
-  .filter-btn i,.filter-btn svg{width:14px;height:14px}
-  .filter-btn span{display:none}
-  .filter-count.show{display:none}
+  .filter-btn{height:26px !important;width:26px !important;padding:0 !important;font-size:0 !important;gap:0 !important;justify-content:center !important;border-radius:50% !important}
+  .filter-btn i,.filter-btn svg{width:14px !important;height:14px !important}
+  .filter-btn span{display:none !important}
+  .filter-count.show{display:none !important}
   /* Chip de usuario: solo rol + salir-icono, sin icono de persona */
-  .top-bar__user{gap:3px;padding:2px 3px 2px 5px;font-size:10px}
-  .top-bar__user > svg,.top-bar__user > i{display:none}
-  .user-chip__rol{padding:0 5px;font-size:9px}
-  .user-chip__exit{padding:2px 5px;border:0}
-  .user-chip__exit svg{width:13px;height:13px}
+  .top-bar__user{gap:3px !important;padding:2px 3px 2px 5px !important;font-size:10px !important}
+  .top-bar__user > svg,.top-bar__user > i{display:none !important}
+  .user-chip__rol{padding:0 5px !important;font-size:9px !important}
+  .user-chip__exit{padding:2px 5px !important;border:0 !important}
+  .user-chip__exit svg{width:13px !important;height:13px !important}
+  /* Badge datos: nunca se muestra en móvil */
+  .data-source-badge{display:none !important}
 }
