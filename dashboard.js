@@ -1214,16 +1214,21 @@ function downloadBlob(blob, filename) {
                 var expBtn = document.getElementById('export-excel-btn');
                 if (expBtn) expBtn.style.display = 'none';
             }
-            // Rol coordinador: su boton de filtros se vuelve EXPORTAR directo.
+            // Rol coordinador: su boton de filtros se vuelve EXPORTAR.
+            // Abre el MISMO menú de exportar (descargar + WhatsApp).
             // Oculta el drawer de filtros y el boton exportar del drawer.
             var isCoord = (typeof fortaIsCoordinador === 'function') && fortaIsCoordinador(fortaSession);
             var toggle = document.getElementById('menu-toggle');
             if (isCoord && toggle) {
                 toggle.innerHTML = '<i data-lucide="file-down"></i><span>Exportar Excel</span>';
                 toggle.setAttribute('aria-label', 'Exportar mis municipios a Excel');
-                toggle.setAttribute('title', 'Descarga tus municipios en Excel');
+                toggle.setAttribute('title', 'Exporta tus municipios (descargar o WhatsApp)');
+                try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch (e2) {}
                 var badge = document.getElementById('menu-badge');
                 if (badge) badge.style.display = 'none';
+                // Marca el botón para que el handler del drawer lo ignore
+                // (si no, el clic abriría/cerraría el drawer oculto en vez de exportar).
+                toggle.setAttribute('data-coord-export', '1');
                 toggle.addEventListener('click', function(e) {
                     e.stopPropagation();
                     coordinadorExportDirecto();
@@ -1236,6 +1241,8 @@ function downloadBlob(blob, filename) {
                 var expInDrawer = document.getElementById('export-excel-btn');
                 if (expInDrawer) expInDrawer.style.display = 'none';
             }
+            // Expone si es coordinador para que el drawer no robe el clic.
+            window.__fortaIsCoord = isCoord;
         }
     } catch (e) { console.error('session UI:', e); }
     // Drawer de filtros: abre/cierra el cajon lateral
@@ -1258,6 +1265,9 @@ function downloadBlob(blob, filename) {
     if (sidebar && toggle && backdrop) {
         toggle.addEventListener('click', function(e) {
             e.stopPropagation();
+            // Coordinador: su botón es EXPORTAR, no filtros. El otro handler
+            // ya abrió el menú; aquí no se toca el drawer.
+            if (toggle.getAttribute('data-coord-export') === '1') return;
             if (sidebar.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
         });
         closeBtn.addEventListener('click', closeDrawer);
