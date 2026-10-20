@@ -953,7 +953,7 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .top-bar h2{font-size:12px !important}
   /* Filtros / Exportar: círculo pequeño solo con icono */
   .filter-btn{height:26px !important;width:26px !important;padding:0 !important;font-size:0 !important;gap:0 !important;justify-content:center !important;border-radius:50% !important}
-  .filter-btn i,.filter-btn svg{width:14px !important;height:14px !important}
+  .filter-btn i,.filter-btn svg{width:16px !important;height:16px !important}
   .filter-btn span{display:none !important}
   .filter-count.show{display:none !important}
   /* Chip de usuario: solo rol + salir-icono, sin icono de persona */
@@ -961,7 +961,8 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .top-bar__user > svg,.top-bar__user > i{display:none !important}
   .user-chip__rol{padding:0 5px !important;font-size:9px !important}
   .user-chip__exit{padding:2px 5px !important;border:0 !important}
-  .user-chip__exit svg{width:13px !important;height:13px !important}
+  .user-chip__exit span{display:none !important}
+  .user-chip__exit svg{width:15px !important;height:15px !important}
   /* Badge datos: nunca se muestra en móvil */
   .data-source-badge{display:none !important}
 }
