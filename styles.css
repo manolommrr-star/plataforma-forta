@@ -944,3 +944,20 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .top-bar__user #user-chip-name{display:none}
   .user-chip__exit span{display:none}
 }
+/* ===== Barra superior compacta en móvil: botones solo-icono para que
+   el título "Plataforma — Fortalecimiento Interno" sí se lea ===== */
+@media(max-width:767px){
+  .top-bar{gap:6px;padding:5px 8px;min-height:40px}
+  .top-bar__left{gap:6px}
+  .top-bar h2{font-size:12px}
+  /* Filtros / Exportar: píldora pequeña solo con icono */
+  .filter-btn{height:28px;padding:0 9px;font-size:0;gap:0}
+  .filter-btn i,.filter-btn svg{width:15px;height:15px}
+  .filter-btn span{display:none}
+  .filter-count.show{display:none}
+  /* Chip de usuario: icono + rol + salir compactos */
+  .top-bar__user{gap:4px;padding:3px 4px 3px 7px;font-size:11px}
+  .user-chip__rol{padding:0 6px;font-size:10px}
+  .user-chip__exit{padding:3px 7px}
+  .user-chip__exit svg{width:13px;height:13px}
+}
