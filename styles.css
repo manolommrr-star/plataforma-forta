@@ -944,25 +944,24 @@ td.numeric{text-align:right;font-variant-numeric:tabular-nums}
   .top-bar__user #user-chip-name{display:none}
   .user-chip__exit span{display:none}
 }
-/* ===== Barra superior compacta en móvil: botones solo-icono para que
-   el título "Plataforma Forta" sí se lea ===== */
+/* ===== Barra superior en móvil: iconos y botones grandes y vistosos ===== */
 @media(max-width:767px){
-  .top-bar{gap:4px !important;padding:4px 6px !important;min-height:36px !important}
-  .top-bar__left{gap:4px !important}
-  .top-bar__left > i{width:13px !important;height:13px !important}
-  .top-bar h2{font-size:12px !important}
-  /* Filtros / Exportar: círculo pequeño solo con icono */
-  .filter-btn{height:26px !important;width:26px !important;padding:0 !important;font-size:0 !important;gap:0 !important;justify-content:center !important;border-radius:50% !important}
-  .filter-btn i,.filter-btn svg{width:16px !important;height:16px !important}
+  .top-bar{gap:8px !important;padding:8px 12px !important;min-height:56px !important}
+  .top-bar__left{gap:8px !important}
+  .top-bar__left > i{width:20px !important;height:20px !important}
+  .top-bar h2{font-size:17px !important}
+  /* Filtros / Exportar: botón redondo grande solo con icono */
+  .filter-btn{height:40px !important;width:40px !important;padding:0 !important;font-size:0 !important;gap:0 !important;justify-content:center !important;border-radius:50% !important}
+  .filter-btn i,.filter-btn svg{width:22px !important;height:22px !important}
   .filter-btn span{display:none !important}
   .filter-count.show{display:none !important}
-  /* Chip de usuario: solo rol + salir-icono, sin icono de persona */
-  .top-bar__user{gap:3px !important;padding:2px 3px 2px 5px !important;font-size:10px !important}
+  /* Chip de usuario: icono de persona oculto, rol + salir grande */
+  .top-bar__user{gap:8px !important;padding:4px 8px 4px 10px !important;font-size:13px !important}
   .top-bar__user > svg,.top-bar__user > i{display:none !important}
-  .user-chip__rol{padding:0 5px !important;font-size:9px !important}
-  .user-chip__exit{padding:2px 5px !important;border:0 !important}
-  .user-chip__exit span{display:none !important}
-  .user-chip__exit svg{width:15px !important;height:15px !important}
+  .user-chip__rol{padding:2px 10px !important;font-size:13px !important}
+  .user-chip__exit{padding:4px 12px !important;border:0 !important}
+  .user-chip__exit span{display:inline !important}
+  .user-chip__exit svg{width:20px !important;height:20px !important}
   /* Badge datos: nunca se muestra en móvil */
   .data-source-badge{display:none !important}
 }
