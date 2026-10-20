@@ -989,7 +989,10 @@ document.getElementById('person-search').addEventListener('input', function(e) {
 
 
 // ===== EXPORTAR EXCEL (móvil: descargar o compartir por WhatsApp) =====
-document.getElementById('export-excel-btn').addEventListener('click', function() {
+// Construye el Excel/CSV de los datos visibles y abre el menú de exportar
+// (descargar, compartir .xlsx, compartir .csv por WhatsApp).
+// filenameBase: prefijo del archivo (ej. 'municipios_filtrados' o 'municipios_felipe_lopez').
+function buildAndOpenExport(filenameBase) {
     if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
     var keys = Object.keys(filteredData[0]).filter(function(k) {
         return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
@@ -1057,14 +1060,27 @@ document.getElementById('export-excel-btn').addEventListener('click', function()
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
         var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        filename = 'municipios_filtrados.xlsx';
+        filename = filenameBase + '.xlsx';
         blob = new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     } else {
-        filename = 'municipios_filtrados.csv';   // sin conexión al CDN de XLSX
+        filename = filenameBase + '.csv';   // sin conexión al CDN de XLSX
         blob = csvBlob;
     }
     openExportSheet(blob, filename, filteredData.length, csvBlob);
+}
+
+// Botón original (drawer de filtros): exporta lo filtrado.
+document.getElementById('export-excel-btn').addEventListener('click', function() {
+    buildAndOpenExport('municipios_filtrados');
 });
+
+// Coordinador: su botón de filtros abre el MISMO menú de exportar
+// (descargar, compartir .xlsx, compartir .csv por WhatsApp), pero con
+// sus municipios y nombre de archivo propio.
+function coordinadorExportDirecto() {
+    var user = (typeof fortaGetSession === 'function' && fortaGetSession()) ? fortaGetSession().usuario : 'zona';
+    buildAndOpenExport('municipios_' + String(user).replace(/[^a-z0-9]+/gi, '_'));
+}
 
 // Abre el menú Exportar: descargar o compartir por WhatsApp (móvil)
 function openExportSheet(blob, filename, count, csvBlob) {
@@ -1139,61 +1155,6 @@ function closeExportSheet() {
     var ov = document.getElementById('export-sheet-overlay');
     if (ov) ov.classList.remove('open');
     document.body.style.overflow = '';
-}
-// Coordinador: exporta DIRECTO sus municipios a Excel (sin menus ni filtros).
-// Reutiliza la misma tabla que el exportar normal (filteredData = su zona).
-function coordinadorExportDirecto() {
-    if (!filteredData.length) { alert('No hay municipios en tu zona para exportar.'); return; }
-    var keys = Object.keys(filteredData[0]).filter(function(k) {
-        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
-    });
-    var headers = keys.map(fieldLabel);
-    var rows = filteredData.map(function(m) {
-        var row = {};
-        keys.forEach(function(h, i) {
-            var v = m[h];
-            if (h === 'pct_2024_locales' || h === 'pct_2024_federales' || h === 'pct_2025') {
-                var p = pctValue(v);
-                v = (p === null) ? '' : Math.round(p * 100) / 100;
-            }
-            row[headers[i]] = (v === null || v === undefined) ? '' : v;
-        });
-        return row;
-    });
-    var user = (typeof fortaGetSession === 'function' && fortaGetSession()) ? fortaGetSession().usuario : 'zona';
-    var filename = 'municipios_' + String(user).replace(/[^a-z0-9]+/gi, '_') + '.xlsx';
-    if (typeof XLSX !== 'undefined') {
-        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-        var widths = headers.map(function(h) {
-            var max = String(h).length;
-            for (var r = 0; r < rows.length; r++) {
-                var val = rows[r][h];
-                if (val === null || val === undefined) continue;
-                var len = String(val).length;
-                if (len > max) max = len;
-            }
-            return { wch: Math.min(Math.max(max + 2, 10), 60) };
-        });
-        ws['!cols'] = widths;
-        ws['!freeze'] = { ySplit: '1' };
-        ws['!autofilter'] = { ref: ws['!ref'] };
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
-        var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        downloadBlob(new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
-    } else {
-        // Sin CDN de XLSX: CSV con ';' (abre en Excel/Sheets/Numbers).
-        var csv = [headers.map(function(h) { return '"' + String(h).replace(/"/g, '""') + '"'; }).join(';')];
-        rows.forEach(function(row) {
-            csv.push(headers.map(function(h) {
-                var v = row[h];
-                if (v === '' || v === null || v === undefined) return '';
-                if (typeof v === 'number') return String(v);
-                return '"' + String(v).replace(/"/g, '""') + '"';
-            }).join(';'));
-        });
-        downloadBlob(new Blob(['﻿' + csv.join('\r\n')], { type: 'text/csv' }), filename.replace(/\.xlsx$/i, '') + '.csv');
-    }
 }
 // Comparte un archivo por el menú nativo (WhatsApp, etc.). Si el sistema rechaza
 // el tipo (Android/Chromium bloquea .xlsx), descarga el archivo como respaldo

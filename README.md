@@ -21,7 +21,7 @@ válida (`sessionStorage`, 8 h). Roles:
 | `admin` | Todo: ver, exportar, gestionar usuarios |
 | `capturista` | Ver municipios y exportar |
 | `consulta` | Solo lectura (botón exportar oculto) |
-| `coordinador` | Solo SUS municipios + botón Filtros convertido en **Exportar Excel directo** (sin drawer de filtros) |
+| `coordinador` | Solo SUS municipios + botón Filtros convertido en **Exportar Excel** (abre el mismo menú: descargar, compartir .xlsx, compartir .csv por WhatsApp) |
 
 Coordinadores de zona (14): user `primer_nombre.primer_apellido`,
 password `primer_apellido.segundo_apellido` (minúsculas, sin acentos).
