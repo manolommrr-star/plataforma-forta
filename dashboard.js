@@ -1205,7 +1205,12 @@ function downloadBlob(blob, filename) {
             fortaScope = Array.isArray(fortaSession.municipios) ? fortaSession.municipios : null;
             var nameEl = document.getElementById('user-chip-name');
             var rolEl = document.getElementById('user-chip-rol');
-            if (nameEl) nameEl.textContent = fortaSession.nombre || fortaSession.usuario;
+            if (nameEl) {
+                var fullName = fortaSession.nombre || fortaSession.usuario || '';
+                nameEl.textContent = fullName;
+                // La barra compacta trunca el nombre: el title conserva el valor completo.
+                nameEl.title = fullName;
+            }
             if (rolEl) rolEl.textContent = fortaSession.rol || '';
             var exitBtn = document.getElementById('logout-btn');
             if (exitBtn) exitBtn.addEventListener('click', function() { fortaLogout(); });

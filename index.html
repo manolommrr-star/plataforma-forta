@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Fortalecimiento Interno — Dashboard Político</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.475.0/dist/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.475.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=7">
+    <link rel="stylesheet" href="styles.css?v=10">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%8F%9B%3C/text%3E%3C/svg%3E">
 </head>
 <body>
@@ -20,19 +20,19 @@
                 <span class="filter-count" id="menu-badge">0</span>
             </button>
             <div class="top-bar__left">
-                <i data-lucide="shield-flag" style="width:16px;height:16px;color:var(--accent);flex-shrink:0"></i>
+                <i data-lucide="shield-check" class="top-bar__brand-icon"></i>
                 <h2>Plataforma Forta</h2>
             </div>
             <div class="top-bar__user" id="user-chip" title="Sesión activa">
-                <i data-lucide="circle-user-round" style="width:14px;height:14px;"></i>
-                <span id="user-chip-name">Usuario</span>
+                <i data-lucide="circle-user-round" class="user-chip__avatar"></i>
+                <span id="user-chip-name" title="Usuario">Usuario</span>
                 <span class="user-chip__rol" id="user-chip-rol">rol</span>
                 <button class="user-chip__exit" id="logout-btn" title="Cerrar sesión">
-                    <i data-lucide="log-out" style="width:16px;height:16px;"></i><span>Salir</span>
+                    <i data-lucide="log-out" class="user-chip__exit-icon"></i><span>Salir</span>
                 </button>
             </div>
             <div class="data-source-badge" style="display:none">
-                <i data-lucide="database" style="width:14px;height:14px;"></i> municipios.json
+                <i data-lucide="database"></i> municipios.json
             </div>
         </header>
 
