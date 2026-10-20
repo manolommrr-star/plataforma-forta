@@ -44,6 +44,7 @@ async function handleLogin(ev) {
             usuario: found.usuario,
             nombre: found.nombre || found.usuario,
             rol: found.rol || 'consulta',
+            municipios: Array.isArray(found.municipios) ? found.municipios : null,
             loginAt: Date.now()
         };
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));

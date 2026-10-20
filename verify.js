@@ -54,20 +54,33 @@ try {
   const authJs = fs.readFileSync(path.join(BASE, 'auth.js'), 'utf8');
   new Function(authJs);
   ok('auth.js sintaxis válida');
-  ['fortaGetSession', 'fortaLogout', 'fortaCanExport', 'login.html'].forEach(s => {
+  ['fortaGetSession', 'fortaLogout', 'fortaCanExport', 'fortaIsCoordinador', 'login.html'].forEach(s => {
     authJs.includes(s) ? ok('auth.js expone ' + s) : fail('auth.js sin ' + s);
   });
   const users = JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'usuarios.json'), 'utf8'));
   if (!users.usuarios || !users.usuarios.length) fail('data/usuarios.json sin usuarios');
   else {
     ok('data/usuarios.json: ' + users.usuarios.length + ' usuario(s)');
+    const numsValidos = new Set(JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'municipios.json'), 'utf8')).map(m => m['numero de municipio']));
     users.usuarios.forEach(u => {
       (!u.usuario || !u.password_sha256 || !u.rol)
         ? fail('usuario incompleto: ' + JSON.stringify(u.usuario))
-        : ok('usuario "' + u.usuario + '" rol=' + u.rol + (u.activo === false ? ' (INACTIVO)' : ''));
+        : ok('usuario "' + u.usuario + '" rol=' + u.rol + (u.activo === false ? ' (INACTIVO)' : '') + (Array.isArray(u.municipios) ? ' (' + u.municipios.length + ' munis)' : ''));
       if (u.password_sha256 && !/^[0-9a-f]{64}$/.test(u.password_sha256)) fail('hash inválido para ' + u.usuario + ' (debe ser SHA-256 hex)');
+      if (u.rol === 'coordinador') {
+        if (!Array.isArray(u.municipios) || !u.municipios.length) fail('coordinador ' + u.usuario + ' sin lista de municipios');
+        else {
+          const fuera = u.municipios.filter(n => !numsValidos.has(n));
+          fuera.length ? fail('coordinador ' + u.usuario + ' con municipios inexistentes: ' + fuera.join(',')) : ok('coordinador ' + u.usuario + ': ' + u.municipios.length + ' municipios válidos');
+        }
+      }
     });
   }
+  // dashboard.js: alcance por coordinador + exportar directo
+  const dashSrc = fs.readFileSync(path.join(BASE, 'dashboard.js'), 'utf8');
+  ['fortaScope', 'coordinadorExportDirecto', 'Exportar Excel', 'filters-sidebar'].forEach(s => {
+    dashSrc.includes(s) ? ok('dashboard.js integra coordinador: ' + s) : fail('dashboard.js sin ' + s);
+  });
 } catch (e) {
   fail('archivos de login: ' + e.message);
 }

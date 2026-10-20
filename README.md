@@ -21,6 +21,12 @@ válida (`sessionStorage`, 8 h). Roles:
 | `admin` | Todo: ver, exportar, gestionar usuarios |
 | `capturista` | Ver municipios y exportar |
 | `consulta` | Solo lectura (botón exportar oculto) |
+| `coordinador` | Solo SUS municipios + botón Filtros convertido en **Exportar Excel directo** (sin drawer de filtros) |
+
+Coordinadores de zona (14): user `primer_nombre.primer_apellido`,
+password `primer_apellido.segundo_apellido` (minúsculas, sin acentos).
+Cada uno solo ve los municipios de su `coordinador_zona`.
+Regenerar tras cambios en el Panel: `node tools/gen-coordinadores.js`.
 
 Usuarios iniciales: `admin` / `admin123` y `consulta` / `consulta123`
 (cambiar tras el primer acceso). Nueva contraseña:
@@ -38,6 +44,7 @@ node tools/hash-password.js "MiClave123"   :: imprime el SHA-256 para pegar en d
 | `auth.js` | Guardia de sesión para `index.html` + permisos por rol (`fortaCanExport`, `fortaCanManageUsers`). |
 | `data/usuarios.json` | Usuarios, roles y hashes SHA-256. |
 | `tools/hash-password.js` | Genera el hash SHA-256 de una contraseña para `data/usuarios.json`. |
+| `tools/gen-coordinadores.js` | Genera los 14 usuarios coordinador desde `coordinador_zona` en `data/municipios.json` (user/pass + alcance por zona). |
 | `index.html` | Solo estructura HTML. Enlaza `styles.css` y carga `auth.js` + `dashboard.js`, que trae los 212 registros via `fetch` desde `data/municipios.json`. Requiere http(s) — no abrir con doble clic. |
 | `styles.css` | Todos los estilos del panel (extraído de `index.html`). |
 | `dashboard.js` | Filtros, búsqueda global, tarjetas, vista de detalle y exportación. Carga `data/municipios.json` via `fetch` (única fuente). |

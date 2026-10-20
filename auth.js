@@ -1,7 +1,12 @@
 /* ==========================================================================
    auth.js — Guardia de sesión + permisos por rol para el panel.
    Debe cargarse ANTES que dashboard.js en index.html (sin defer).
-   Roles: admin (todo) > capturista (ver + exportar) > consulta (solo ver).
+   Roles:
+     admin        todo (ver + exportar + gestionar)
+     capturista   ver + exportar
+     consulta     solo ver (sin exportar)
+     coordinador  solo SUS municipios + exportar directo a Excel
+                  (su boton de filtros se convierte en exportar)
    ========================================================================== */
 'use strict';
 
@@ -25,8 +30,13 @@ function fortaLogout() {
     location.href = 'login.html';
 }
 
+function fortaIsCoordinador(session) {
+    return !!session && session.rol === 'coordinador';
+}
+
 function fortaCanExport(rol) {
-    return rol === 'admin' || rol === 'capturista';
+    // consulta = solo lectura; todos los demas exportan
+    return rol === 'admin' || rol === 'capturista' || rol === 'coordinador';
 }
 
 function fortaCanManageUsers(rol) {

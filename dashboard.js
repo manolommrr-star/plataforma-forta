@@ -21,7 +21,15 @@ function setSubtitle(text) {
 
 // Cargar datos SOLO desde data/municipios.json via fetch.
 // Requiere servirse por http(s) (ej. npx serve .). No funciona con file:// por CORS.
+// Rol coordinador: solo ve los municipios de su zona (lista en la sesión).
+var fortaScope = null; // numeros de municipio permitidos (null = todos)
+
 function initData(data) {
+    if (Array.isArray(fortaScope) && fortaScope.length) {
+        var permitidos = {};
+        fortaScope.forEach(function(n) { permitidos[n] = true; });
+        data = data.filter(function(m) { return permitidos[m['numero de municipio']]; });
+    }
     allData = data;
 
         // Inicializar secciones extensibles
@@ -1132,6 +1140,61 @@ function closeExportSheet() {
     if (ov) ov.classList.remove('open');
     document.body.style.overflow = '';
 }
+// Coordinador: exporta DIRECTO sus municipios a Excel (sin menus ni filtros).
+// Reutiliza la misma tabla que el exportar normal (filteredData = su zona).
+function coordinadorExportDirecto() {
+    if (!filteredData.length) { alert('No hay municipios en tu zona para exportar.'); return; }
+    var keys = Object.keys(filteredData[0]).filter(function(k) {
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
+    });
+    var headers = keys.map(fieldLabel);
+    var rows = filteredData.map(function(m) {
+        var row = {};
+        keys.forEach(function(h, i) {
+            var v = m[h];
+            if (h === 'pct_2024_locales' || h === 'pct_2024_federales' || h === 'pct_2025') {
+                var p = pctValue(v);
+                v = (p === null) ? '' : Math.round(p * 100) / 100;
+            }
+            row[headers[i]] = (v === null || v === undefined) ? '' : v;
+        });
+        return row;
+    });
+    var user = (typeof fortaGetSession === 'function' && fortaGetSession()) ? fortaGetSession().usuario : 'zona';
+    var filename = 'municipios_' + String(user).replace(/[^a-z0-9]+/gi, '_') + '.xlsx';
+    if (typeof XLSX !== 'undefined') {
+        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        var widths = headers.map(function(h) {
+            var max = String(h).length;
+            for (var r = 0; r < rows.length; r++) {
+                var val = rows[r][h];
+                if (val === null || val === undefined) continue;
+                var len = String(val).length;
+                if (len > max) max = len;
+            }
+            return { wch: Math.min(Math.max(max + 2, 10), 60) };
+        });
+        ws['!cols'] = widths;
+        ws['!freeze'] = { ySplit: '1' };
+        ws['!autofilter'] = { ref: ws['!ref'] };
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
+        var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        downloadBlob(new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+    } else {
+        // Sin CDN de XLSX: CSV con ';' (abre en Excel/Sheets/Numbers).
+        var csv = [headers.map(function(h) { return '"' + String(h).replace(/"/g, '""') + '"'; }).join(';')];
+        rows.forEach(function(row) {
+            csv.push(headers.map(function(h) {
+                var v = row[h];
+                if (v === '' || v === null || v === undefined) return '';
+                if (typeof v === 'number') return String(v);
+                return '"' + String(v).replace(/"/g, '""') + '"';
+            }).join(';'));
+        });
+        downloadBlob(new Blob(['﻿' + csv.join('\r\n')], { type: 'text/csv' }), filename.replace(/\.xlsx$/i, '') + '.csv');
+    }
+}
 // Comparte un archivo por el menú nativo (WhatsApp, etc.). Si el sistema rechaza
 // el tipo (Android/Chromium bloquea .xlsx), descarga el archivo como respaldo
 // para que el usuario lo adjunte a mano desde WhatsApp.
@@ -1174,19 +1237,43 @@ function downloadBlob(blob, filename) {
 (function() {
     // Sesión: pinta usuario/rol, botón salir y permisos por rol.
     // El guardia auth.js ya redirigió al login si no hay sesión.
+    var fortaSession = null;
     try {
-        var session = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
-        if (session) {
+        fortaSession = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+        if (fortaSession) {
+            fortaScope = Array.isArray(fortaSession.municipios) ? fortaSession.municipios : null;
             var nameEl = document.getElementById('user-chip-name');
             var rolEl = document.getElementById('user-chip-rol');
-            if (nameEl) nameEl.textContent = session.nombre || session.usuario;
-            if (rolEl) rolEl.textContent = session.rol || '';
+            if (nameEl) nameEl.textContent = fortaSession.nombre || fortaSession.usuario;
+            if (rolEl) rolEl.textContent = fortaSession.rol || '';
             var exitBtn = document.getElementById('logout-btn');
             if (exitBtn) exitBtn.addEventListener('click', function() { fortaLogout(); });
             // Rol consulta: sin exportar (se oculta el botón del drawer).
-            if (typeof fortaCanExport === 'function' && !fortaCanExport(session.rol)) {
+            if (typeof fortaCanExport === 'function' && !fortaCanExport(fortaSession.rol)) {
                 var expBtn = document.getElementById('export-excel-btn');
                 if (expBtn) expBtn.style.display = 'none';
+            }
+            // Rol coordinador: su boton de filtros se vuelve EXPORTAR directo.
+            // Oculta el drawer de filtros y el boton exportar del drawer.
+            var isCoord = (typeof fortaIsCoordinador === 'function') && fortaIsCoordinador(fortaSession);
+            var toggle = document.getElementById('menu-toggle');
+            if (isCoord && toggle) {
+                toggle.innerHTML = '<i data-lucide="file-down"></i><span>Exportar Excel</span>';
+                toggle.setAttribute('aria-label', 'Exportar mis municipios a Excel');
+                toggle.setAttribute('title', 'Descarga tus municipios en Excel');
+                var badge = document.getElementById('menu-badge');
+                if (badge) badge.style.display = 'none';
+                toggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    coordinadorExportDirecto();
+                });
+                // Sin drawer para el coordinador: no hay filtros que abrir.
+                var sb = document.getElementById('filters-sidebar');
+                if (sb) sb.style.display = 'none';
+                var bd = document.getElementById('drawer-backdrop');
+                if (bd) bd.style.display = 'none';
+                var expInDrawer = document.getElementById('export-excel-btn');
+                if (expInDrawer) expInDrawer.style.display = 'none';
             }
         }
     } catch (e) { console.error('session UI:', e); }
