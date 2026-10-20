@@ -1209,6 +1209,9 @@ function downloadBlob(blob, filename) {
             if (rolEl) rolEl.textContent = fortaSession.rol || '';
             var exitBtn = document.getElementById('logout-btn');
             if (exitBtn) exitBtn.addEventListener('click', function() { fortaLogout(); });
+            // Badge municipios.json: SOLO admins (al resto les estorba en el móvil).
+            var srcBadge = document.querySelector('.data-source-badge');
+            if (srcBadge) srcBadge.style.display = (fortaSession.rol === 'admin') ? '' : 'none';
             // Rol consulta: sin exportar (se oculta el botón del drawer).
             if (typeof fortaCanExport === 'function' && !fortaCanExport(fortaSession.rol)) {
                 var expBtn = document.getElementById('export-excel-btn');
