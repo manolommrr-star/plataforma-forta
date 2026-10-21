@@ -70,6 +70,7 @@ const PROBE = `(() => {
   })();
   return {
     vw: innerWidth,
+    docTitle: document.title,
     iconsTotal: icons.length,
     iconsInBar: barIcons.length,
     zeroIcons,
@@ -270,9 +271,12 @@ async function loadWS() {
     if (mobile) {
       add(`[${r.label}] areas tactiles >= 44px`,
           r.tapTargets.every(t => t.w >= 44 && t.h >= 44), JSON.stringify(r.tapTargets));
-      add(`[${r.label}] solo iconos (texto oculto)`,
-          r.title.display === 'none' && r.btn.textDisplay === 'none',
-          `title=${r.title.display} btn=${r.btn.textDisplay}`);
+      add(`[${r.label}] titulo visible en movil`,
+          r.title.display !== 'none' && r.title.w >= 40,
+          `title=${r.title.display} w=${r.title.w}`);
+      add(`[${r.label}] boton de filtros solo con icono`,
+          r.btn.textDisplay === 'none',
+          `btn=${r.btn.textDisplay}`);
     } else {
       add(`[${r.label}] texto e iconos visibles`,
           r.title.display !== 'none' && r.btn.textDisplay !== 'none',
