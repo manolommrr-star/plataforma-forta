@@ -69,26 +69,41 @@ function esperadoIncluye(lista, esperados) {
   return esperados.every(n => lista.includes(n));
 }
 
-// Usuario coordinador real de data/usuarios.json + su contraseña en claro
-// (regla del proyecto: primer_apellido.segundo_apellido, minusculas, sin acentos).
+// Usuario coordinador real de data/usuarios.json + su contraseña en claro.
+// La contraseña vive en tools/_coord-pw.json (NO versionado: son credenciales
+// reales). Si no existe, se deriva del nombre con la regla del proyecto
+// (primer_apellido.segundo_apellido, minusculas, sin acentos).
 const sinAcentos = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const low = s => sinAcentos(s).toLowerCase().trim();
+function claveCoordinador(usuario, nombre) {
+  const ruta = path.join(BASE, 'tools', '_coord-pw.json');
+  if (fs.existsSync(ruta)) {
+    const mapa = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+    if (mapa[usuario]) return mapa[usuario];
+  }
+  const t = nombre.trim().split(/\s+/);
+  return low(t[t.length - 2]) + '.' + low(t[t.length - 1]);
+}
 function credencialesCoordinador() {
   const users = JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'usuarios.json'), 'utf8')).usuarios;
   const datos = JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'municipios.json'), 'utf8'));
-  const porCoord = new Map();
+  // usuarios.json guarda el nombre en mayusculas ("CARLOS ALBERTO MEJÍA
+  // COVARRUBIAS"), mientras que data/municipios.json lo guarda en
+  // "coordinador_zona" tal cual viene del Excel. Se comparan normalizados
+  // (sin acentos y en mayusculas) para no depender de las mayusculas.
+  const norm = s => sinAcentos(String(s || '')).toUpperCase().replace(/\s+/g, ' ').trim();
+  const porCoordNorm = new Map();
   datos.forEach(m => {
-    const c = String(m.coordinador_zona || '').trim();
+    const c = norm(m.coordinador_zona);
     if (!c) return;
-    if (!porCoord.has(c)) porCoord.set(c, []);
-    porCoord.get(c).push(m['numero de municipio']);
+    if (!porCoordNorm.has(c)) porCoordNorm.set(c, []);
+    porCoordNorm.get(c).push(m['numero de municipio']);
   });
-  const u = users.find(u => u.rol === 'coordinador' && porCoord.has(u.nombre));
+  const u = users.find(u => u.rol === 'coordinador' && porCoordNorm.has(norm(u.nombre)));
   if (!u) throw new Error('no hay coordinador con datos');
-  const t = u.nombre.trim().split(/\s+/);
   return {
     usuario: u.usuario,
-    password: low(t[t.length - 2]) + '.' + low(t[t.length - 1]),
+    password: claveCoordinador(u.usuario, u.nombre),
     municipios: u.municipios
   };
 }
@@ -229,8 +244,7 @@ function credencialesCoordinador() {
   if (!compartido) {
     console.log('  (sin usuarios con municipios_adicionales; se omite)');
   } else {
-    const t = compartido.nombre.trim().split(/\s+/);
-    const pass = low(t[t.length - 2]) + '.' + low(t[t.length - 1]);
+    const pass = claveCoordinador(compartido.usuario, compartido.nombre);
     await cdp.send('Page.navigate', { url: base + '/login.html' });
     await new Promise(r => setTimeout(r, 2000));
     // Sesion previa -> login.html redirige al panel; se limpia para ver el form.
@@ -296,6 +310,76 @@ function credencialesCoordinador() {
     }
     check(todosVisibles, 'Carlos Mejia ve sus 5 municipios compartidos en la busqueda' +
       (faltan.length ? ' FALTAN: ' + faltan.join(', ') : ''));
+  }
+
+  console.log('\n[7] Filtro "Coordinador de zona" con municipios COMPARTIDOS');
+  {
+    const usuarios = JSON.parse(fs.readFileSync(path.join(BASE, 'data', 'usuarios.json'), 'utf8')).usuarios;
+    const conExtra = usuarios.find(u => u.rol === 'coordinador' && (u.municipios_adicionales || []).length);
+    if (!conExtra) {
+      console.log('  (sin coordinadores con municipios_adicionales; se omite)');
+    } else {
+      // Sesion de admin: el filtro se usa desde el panel completo.
+      const admin = usuarios.find(u => u.rol === 'admin');
+      await cdp.send('Page.navigate', { url: base + '/login.html' });
+      await new Promise(r => setTimeout(r, 1500));
+      await cdp.evaluate(`(() => {
+        sessionStorage.clear();
+        sessionStorage.setItem('forta_session', JSON.stringify({
+          usuario: ${JSON.stringify(admin.usuario)}, nombre: ${JSON.stringify(admin.nombre || admin.usuario)},
+          rol: 'admin', municipios: null, loginAt: Date.now()
+        }));
+        return true;
+      })()`);
+      await cdp.send('Page.navigate', { url: URL_BASE });
+      await new Promise(r => setTimeout(r, 3500));
+
+      const nombreCoord = conExtra.nombre.trim().split(/\s+/).map(p =>
+        p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+
+      const filtro = await cdp.evaluate(`(() => {
+        const NOMBRE = ${JSON.stringify(nombreCoord)};
+        const cont = document.getElementById('filter-coordinador');
+        if (!cont) return { error: 'no existe #filter-coordinador' };
+        const opciones = [...cont.querySelectorAll('.options-list input[type="checkbox"]')].map(i => i.value);
+        const search = cont.querySelector('.option-search');
+        // El buscador del desplegable: "carlos mejia" debe encontrar al coordinador.
+        if (search) {
+          search.value = ${JSON.stringify(nombreCoord.toLowerCase().split(/\s+/).slice(0, 2).join(' '))};
+          search.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const visibles = [...cont.querySelectorAll('.multi-select__option')]
+          .filter(o => o.style.display !== 'none')
+          .map(o => o.textContent.trim());
+        if (search) { search.value = ''; search.dispatchEvent(new Event('input', { bubbles: true })); }
+        // Marcar la casilla del coordinador y aplicar el filtro.
+        const cb = cont.querySelector('input[value="' + NOMBRE + '"]');
+        if (!cb) return { error: 'el coordinador no esta en las opciones', opciones, visibles };
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+        return { opciones, visibles };
+      })()`);
+
+      check(!filtro.error, 'filtro coordinador: la UI responde (' + (filtro.error || 'ok') + ')');
+      check((filtro.opciones || []).includes(nombreCoord),
+        'filtro coordinador: ' + conExtra.usuario + ' aparece en el desplegable');
+      check((filtro.visibles || []).some(v => v === nombreCoord),
+        'filtro coordinador: el buscador del desplegable encuentra a ' + nombreCoord +
+        ' (escribiendo solo las dos primeras palabras)');
+
+      const vista = await cdp.evaluate(`(() => {
+        const nombres = [...document.querySelectorAll('#muni-list .muni-card__name')].map(e => e.textContent.trim());
+        const chip = document.querySelector('#active-filters-bar');
+        return { nombres, chip: chip ? chip.textContent.trim() : '', cards: nombres.length };
+      })()`);
+      const esperados = conExtra.municipios_adicionales.map(n => nombreDe(n).toUpperCase());
+      const faltan = esperados.filter(n => !vista.nombres.includes(n));
+      check(faltan.length === 0,
+        'filtro coordinador: los ' + esperados.length + ' municipios COMPARTIDOS de ' + conExtra.usuario +
+        ' salen al filtrar por el' + (faltan.length ? ' FALTAN: ' + faltan.join(', ') : ''));
+      check(/coordinador/i.test(vista.chip),
+        'filtro coordinador: el chip activo dice "Coordinador" (no undefined)');
+    }
   }
 
   console.log('\n' + (fallos ? 'COORD: ' + fallos + ' fallo(s) ✘' : 'COORD: modo coordinador correcto ✔'));

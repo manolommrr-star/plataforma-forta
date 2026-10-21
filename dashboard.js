@@ -48,12 +48,66 @@ function initData(data) {
         applyFilters();
 }
 
+// Alcance por coordinador (normalizado): zona + municipios compartidos.
+//   zona  -> municipios propios (coordinador_zona en data/municipios.json)
+//   extra -> municipios_adicionales de data/usuarios.json (acceso compartido;
+//            compartir NO cambia el coordinador_zona del municipio)
+var coordinatorScopeMap = {};
+var coordinatorNames = [];
+
+function buildCoordinatorScopeMap(data) {
+    coordinatorScopeMap = {};
+    coordinatorNames = [];
+    ((data && data.usuarios) || []).forEach(function(u) {
+        if (u.rol !== 'coordinador') return;
+        var name = nameCase(u.nombre || u.usuario);
+        var zona = new Set();
+        var extra = new Set();
+        (u.municipios || []).forEach(function(n) { zona.add(n); });
+        (u.municipios_adicionales || []).forEach(function(n) { extra.add(n); });
+        var todos = new Set(zona);
+        extra.forEach(function(n) { todos.add(n); });
+        coordinatorScopeMap[name] = { zona: zona, extra: extra, todos: todos };
+        coordinatorNames.push(name);
+    });
+}
+
+// Devuelve true si el municipio pertenece al alcance (zona + compartidos)
+// de ALGUNO de los coordinadores seleccionados.
+function municipioEnCoordinadoresSeleccionados(m, seleccionados) {
+    var num = m['numero de municipio'];
+    var zona = nameCase(m.coordinador_zona);
+    var coincide = false;
+    seleccionados.forEach(function(cn) {
+        if (coincide) return;
+        if (zona && zona === cn) { coincide = true; return; }
+        var sc = coordinatorScopeMap[cn];
+        if (sc && sc.todos.has(num)) coincide = true;
+    });
+    return coincide;
+}
+
 async function loadData() {
     setSubtitle('Cargando municipios...');
     try {
-        const res = await fetch('data/municipios.json', { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' al cargar data/municipios.json');
-        initData(await res.json());
+        var resMunis = await fetch('data/municipios.json', { cache: 'no-store' });
+        if (!resMunis.ok) throw new Error('HTTP ' + resMunis.status + ' al cargar data/municipios.json');
+        var munisData = await resMunis.json();
+
+        // usuarios.json solo aporta el alcance de los coordinadores (municipios
+        // compartidos). Si falla, se sigue con los municipios: el filtro por
+        // coordinador funciona por zona, pero los municipios compartidos no
+        // se incluyen.
+        var usersData = { usuarios: [] };
+        try {
+            var resUsers = await fetch('data/usuarios.json', { cache: 'no-store' });
+            if (!resUsers.ok) throw new Error('HTTP ' + resUsers.status);
+            usersData = await resUsers.json();
+        } catch (uerr) {
+            console.warn('No se pudo cargar data/usuarios.json (municipios compartidos no disponibles):', uerr);
+        }
+        buildCoordinatorScopeMap(usersData);
+        initData(munisData);
     } catch(err) {
         console.error('Error cargando datos:', err);
         setSubtitle('ERROR cargando data/municipios.json. Sirve la carpeta por http (ej. npx serve .) — file:// bloquea fetch por CORS.');
@@ -61,23 +115,81 @@ async function loadData() {
 }
 
 
+// Lista de coordinadores que se ofrecen en el filtro: los que aparecen como
+// coordinador_zona de algún municipio visible + los coordinadores usuarios que
+// tienen municipios visibles en su alcance (zona + compartidos). Así un
+// coordinador con municipios COMPARTIDOS (p.ej. Carlos Mejía, que comparte 5
+// municipios de la zona de Miguel Ochoa) también aparece y puede filtrarse.
+function coordinadoresFiltrables() {
+    var visibles = {};
+    allData.forEach(function(m) {
+        var num = m['numero de municipio'];
+        var zona = nameCase(m.coordinador_zona);
+        if (zona) visibles[zona] = true;
+        coordinatorNames.forEach(function(cn) {
+            var sc = coordinatorScopeMap[cn];
+            if (sc && sc.todos.has(num)) visibles[cn] = true;
+        });
+    });
+    return Object.keys(visibles).sort();
+}
+
+// ===== FILTRO DE ESTATUS DE ESTRUCTURA: "SIN ESTRUCTURA" =====
+// Los municipios SIN estructura vienen con `estatus_estructura` vacio (null)
+// en data/municipios.json. Para poder filtrarlos desde el mismo desplegable se
+// usa un valor centinela (que nunca coincide con un estatus real) con una
+// etiqueta visible propia: "Sin estructura".
+var ESTATUS_SIN_ESTRUCTURA = '__sin_estructura__';
+var ESTATUS_SIN_ESTRUCTURA_LABEL = 'Sin estructura';
+
+// Valor de filtro del estatus de un municipio: el texto real o el centinela.
+function estatusFiltroValor(m) {
+    var e = (m.estatus_estructura || '').trim();
+    return e || ESTATUS_SIN_ESTRUCTURA;
+}
+
+// Etiqueta visible de un valor de filtro (tags del drawer y chips activos).
+function filterValueLabel(key, val) {
+    if (key === 'estatus_estructura' && val === ESTATUS_SIN_ESTRUCTURA) {
+        return ESTATUS_SIN_ESTRUCTURA_LABEL;
+    }
+    return val;
+}
+
+// Opciones del desplegable "Estatus de Estructura": los estatus reales que
+// existen en los datos + la opcion virtual "Sin estructura" (centinela).
+function estatusFiltroOpciones() {
+    var valores = Array.from(new Set(allData.map(function(m) {
+        return (m.estatus_estructura || '').trim();
+    }))).filter(function(v) { return v; }).sort();
+    return valores.concat([ESTATUS_SIN_ESTRUCTURA]);
+}
+
+// Mapa valor -> etiqueta visible para el desplegable de estatus.
+function estatusFiltroEtiquetas() {
+    var mapa = {};
+    mapa[ESTATUS_SIN_ESTRUCTURA] = ESTATUS_SIN_ESTRUCTURA_LABEL;
+    return mapa;
+}
+
 // Inicializar filtros (poblar dropdowns)
 function initFilters() {
     populateMultiSelect('filter-distrito-local',
         Array.from(new Set(allData.map(m => m.distrito_local))).filter(v => v).sort(),
         'distrito_local');
-        populateMultiSelect('filter-distrito-federal',
+    populateMultiSelect('filter-distrito-federal',
         Array.from(new Set(allData.map(m => m.distrito_federal))).filter(v => v).sort(),
         'distrito_federal');
-        populateMultiSelect('filter-estatus',
-        Array.from(new Set(allData.map(m => m.estatus_estructura))).filter(v => v).sort(),
-        'estatus_estructura');
-        populateMultiSelect('filter-coordinador',
-        Array.from(new Set(allData.map(m => nameCase(m.coordinador_zona)))).filter(v => v).sort(),
-        'coordinador');
+    // Estatus reales + la opcion virtual "Sin estructura" (centinela).
+    populateMultiSelect('filter-estatus',
+        estatusFiltroOpciones(),
+        'estatus_estructura',
+        estatusFiltroEtiquetas());
+    populateMultiSelect('filter-coordinador', coordinadoresFiltrables(), 'coordinador');
 }
 
-function populateMultiSelect(containerId, options, filterKey) {
+// optionLabels: mapa opcional valor -> etiqueta visible (por defecto, el valor).
+function populateMultiSelect(containerId, options, filterKey, optionLabels) {
     var container = document.getElementById(containerId);
     var optionsList = container.querySelector('.options-list');
     var tagsContainer = container.querySelector('.tags-container');
@@ -87,10 +199,12 @@ function populateMultiSelect(containerId, options, filterKey) {
     var searchBox = container.querySelector('.option-search');
 
     optionsList.innerHTML = '';
+    var labels = optionLabels || {};
     options.forEach(function(opt) {
         var div = document.createElement('div');
         div.className = 'multi-select__option';
-        div.innerHTML = '<input type="checkbox" value="' + opt + '" data-filter="' + filterKey + '"><span>' + opt + '</span>';
+        div.innerHTML = '<input type="checkbox" value="' + escapeHtml(opt) + '" data-filter="' + filterKey + '">' +
+            '<span>' + escapeHtml(labels[opt] || opt) + '</span>';
         div.querySelector('input').addEventListener('change', onFilterChange);
         optionsList.appendChild(div);
     });
@@ -105,9 +219,15 @@ function populateMultiSelect(containerId, options, filterKey) {
     });
     if (searchBox) {
         searchBox.addEventListener('input', function(e) {
-            var term = normText(e.target.value);
+            // Coincidencia por palabras (AND) en lugar de subcadena contigua:
+            // permite escribir "carlos mejia" y encontrar
+            // "Carlos Alberto Mejía Covarrubias" (las palabras pueden ir en
+            // cualquier orden). Con una sola palabra se comporta igual que antes.
+            var tokens = normText(e.target.value).split(/\s+/).filter(Boolean);
             container.querySelectorAll('.multi-select__option').forEach(function(opt) {
-                opt.style.display = normText(opt.textContent).includes(term) ? '' : 'none';
+                var txt = normText(opt.textContent);
+                var visible = tokens.every(function(t) { return txt.indexOf(t) >= 0; });
+                opt.style.display = visible ? '' : 'none';
             });
         });
     }
@@ -126,7 +246,7 @@ function populateMultiSelect(containerId, options, filterKey) {
         selected.forEach(function(val) {
             var tag = document.createElement('span');
             tag.className = 'tag';
-            tag.textContent = val;
+            tag.textContent = filterValueLabel(filterKey, val);
             tag.addEventListener('click', function(e) {
                 e.stopPropagation();
                 activeFilters[filterKey].delete(val);
@@ -147,7 +267,8 @@ function populateMultiSelect(containerId, options, filterKey) {
 var FILTER_GROUP_LABELS = {
     distrito_local: 'D. Local',
     distrito_federal: 'D. Federal',
-    estatus_estructura: 'Estatus'
+    estatus_estructura: 'Estatus',
+    coordinador: 'Coordinador'
 };
 
 function renderActiveFilterChips() {
@@ -161,7 +282,8 @@ function renderActiveFilterChips() {
             total++;
             var chip = document.createElement('span');
             chip.className = 'af-chip';
-            chip.innerHTML = '<span class="af-group">' + FILTER_GROUP_LABELS[key] + ':</span>' + escapeHtml(val) + '<span class="af-x">×</span>';
+            chip.innerHTML = '<span class="af-group">' + FILTER_GROUP_LABELS[key] + ':</span>' +
+                escapeHtml(filterValueLabel(key, val)) + '<span class="af-x">×</span>';
             chip.title = 'Quitar filtro';
             chip.addEventListener('click', function() {
                 activeFilters[key].delete(val);
@@ -211,8 +333,8 @@ function applyFilters() {
     filteredData = allData.filter(function(m) {
         if (activeFilters.distrito_local.size > 0 && !activeFilters.distrito_local.has(m.distrito_local)) return false;
         if (activeFilters.distrito_federal.size > 0 && !activeFilters.distrito_federal.has(m.distrito_federal)) return false;
-        if (activeFilters.estatus_estructura.size > 0 && !activeFilters.estatus_estructura.has(m.estatus_estructura)) return false;
-        if (activeFilters.coordinador.size > 0 && !activeFilters.coordinador.has(nameCase(m.coordinador_zona))) return false;
+        if (activeFilters.estatus_estructura.size > 0 && !activeFilters.estatus_estructura.has(estatusFiltroValor(m))) return false;
+        if (activeFilters.coordinador.size > 0 && !municipioEnCoordinadoresSeleccionados(m, activeFilters.coordinador)) return false;
         return true;
     });
     // Orden alfabetico por nombre de municipio

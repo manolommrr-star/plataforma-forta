@@ -39,6 +39,22 @@ Ejemplo: `carlos.mejia` ve sus 7 municipios + los 5 de la zona 10
 siendo zona de Miguel Ochoa. `tools/gen-coordinadores.js` preserva este campo
 al regenerar.
 
+**Filtro "Coordinador de zona":** al filtrar por un coordinador se muestran sus
+municipios de zona **y los compartidos** (los `municipios_adicionales` que le
+tocan), aunque esos últimos sigan siendo zona de otro coordinador. Por eso
+Carlos Mejía aparece en el desplegable y su filtro devuelve 12 municipios
+(7 + 5). Los coordinadores que solo tienen municipios compartidos también
+aparecen en el desplegable. El buscador del desplegable busca por palabras
+("carlos mejia" encuentra "Carlos Alberto Mejía Covarrubias").
+
+**Filtro "Estatus de Estructura":** además de los estatus reales (Comité
+Directivo Municipal, Delegación Municipal, Comisión Organizadora), el
+desplegable ofrece la opción **"Sin estructura"**, que agrupa a los municipios
+sin `estatus_estructura` en el Excel (actualmente **61 de 212**). Se implementa
+con un centinela interno (`__sin_estructura__`) que no puede colisionar con un
+estatus real y que nunca se escribe en los datos: el tag del drawer y el chip
+de filtro activo muestran el texto legible "Sin estructura".
+
 **Buscadores del coordinador:** en el panel hay dos barras de búsqueda —
 *general* (revisa todos los campos) y *Municipios o personas*. El coordinador
 solo ve la **general**, ya acotada a sus municipios (`fortaScope` filtra los
@@ -72,6 +88,8 @@ contraseña palabra.palabra.NNNNNNNN (dos palabras + dos números aleatorios)**.
 | `data/usuarios.json` | Usuarios, roles y hashes SHA-256. |
 | `tools/hash-password.js` | Genera el hash SHA-256 de una contraseña para `data/usuarios.json`. |
 | `tools/gen-coordinadores.js` | Genera los 14 usuarios coordinador desde `coordinador_zona` en `data/municipios.json` (user/pass + alcance por zona). |
+| `make-xlsx.js` | Genera `usuarios.xlsx` (Excel nativo, 100% compatible) usando el motor de `tools/generate_excel.py`. Uso: `node make-xlsx.js` (o `--regenerate` para cambiar contraseñas). Las contraseñas en claro quedan SOLO en `tools/_coord-pw.json`, que **no** se versiona. |
+| `tools/generate_excel.py` | Motor de generación del Excel de usuarios (openpyxl): usuarios, roles, correos y contraseñas en claro, con estilos institucionales. Requisito: `openpyxl` instalado. |
 | `index.html` | Solo estructura HTML. Enlaza `styles.css` y carga `auth.js` + `dashboard.js`, que trae los 212 registros via `fetch` desde `data/municipios.json`. Requiere http(s) — no abrir con doble clic. |
 | `styles.css` | Todos los estilos del panel (extraído de `index.html`). |
 | `dashboard.js` | Filtros, búsqueda global, tarjetas, vista de detalle y exportación. Carga `data/municipios.json` via `fetch` (única fuente). |
@@ -84,7 +102,7 @@ contraseña palabra.palabra.NNNNNNNN (dos palabras + dos números aleatorios)**.
 | `build-votos.js` | **Votos por partido desde el SEE.** Lee los 3 listados del SEE (`2025_SEE_AYUN_VER_MUN`, `2024_SEE_DIP_LOC_MR_VER_MUN`, `2024_SEE_DIP_FED_MR_NAL_MUN`), calcula por municipio y votación una barra por partido con su `%` sobre el total de votos **a partidos** (sin coaliciones, ni candidatos independientes, ni nulos) y guarda el campo `votos_partidos` en `data/municipios.json` y `data/votos.json`. Ver sección *Votos por partido*. |
 | `verify.js` | Verificación de integridad (5 secciones; comprueba que `index.html` NO lleve datos embebidos). |
 | `smoke-ui.js` | Prueba de renderizado: ejecuta `dashboard.js` con un DOM simulado + `data/municipios.json`. |
-| `tools/check-coord-busqueda.js` | Prueba en vivo (Chrome CDP): login real, que el coordinador solo vea la barra de búsqueda general, que la búsqueda no se salga de su zona, que los municipios compartidos (`municipios_adicionales`) se vean y que los demás roles sigan viendo las dos barras. |
+| `tools/check-coord-busqueda.js` | Prueba en vivo (Chrome CDP): login real, que el coordinador solo vea la barra de búsqueda general, que la búsqueda no se salga de su zona, que los municipios compartidos (`municipios_adicionales`) se vean, que el filtro "Coordinador de zona" devuelva zona + compartidos y que los demás roles sigan viendo las dos barras. Necesita `tools/_coord-pw.json` (contraseñas reales; no se versiona). |
 | `inspect-xlsx.js` | **Radiografía de un Excel nuevo**: hojas que trae, columna por columna (título real, campo del JSON, filas con dato, formato, valor descartado) y diferencias contra `data/municipios.json`. Útil cada vez que llega una versión nueva del panel. |
 
 ## Comandos

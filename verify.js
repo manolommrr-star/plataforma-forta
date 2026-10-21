@@ -178,7 +178,9 @@ if (fileData) {
     // "votos_partidos" es un dato ESTRUCTURADO (objeto con las barras por
     // partido de cada votacion) que NO se exporta al CSV/Excel, igual que
     // metricas/etiquetas/metadata: no necesita etiqueta en FIELD_LABELS.
-    const noExportables = ['metricas', 'etiquetas', 'metadata', 'votos_partidos'];
+    // "zona" tampoco se exporta (dashboard.js lo filtra de las claves), asi que
+    // tampoco necesita etiqueta.
+    const noExportables = ['metricas', 'etiquetas', 'metadata', 'votos_partidos', 'zona'];
     const sinEtiqueta = Object.keys(fileData[0])
       .filter(k => noExportables.indexOf(k) < 0 && labelsBlock.indexOf("'" + k + "'") < 0);
     sinEtiqueta.length
@@ -347,6 +349,55 @@ if (!jsSource) {
         ? ok('estatusShort("' + (valor || '(vacío)') + '") = ' + corto)
         : fail('estatusShort("' + (valor || '(vacío)') + '") devolvió ' + ui.estatusShort(valor) + ', se esperaba ' + corto);
     });
+
+    // Filtro de estatus: la opcion virtual "Sin estructura" (centinela) para
+    // los municipios con `estatus_estructura` vacio.
+    const desdeF = jsSource.indexOf('var ESTATUS_SIN_ESTRUCTURA');
+    const hastaF = jsSource.indexOf('// Inicializar filtros');
+    if (desdeF < 0 || hastaF < 0) throw new Error('no se localizó el bloque del filtro de estatus');
+    const uiF = new Function('allData', jsSource.slice(desdeF, hastaF) +
+      '\nreturn { ESTATUS_SIN_ESTRUCTURA, ESTATUS_SIN_ESTRUCTURA_LABEL, estatusFiltroValor, filterValueLabel, estatusFiltroOpciones, estatusFiltroEtiquetas };')([]);
+    uiF.ESTATUS_SIN_ESTRUCTURA === '__sin_estructura__'
+      ? ok('filtro estatus: centinela interno "__sin_estructura__"')
+      : fail('filtro estatus: el centinela interno cambió a ' + uiF.ESTATUS_SIN_ESTRUCTURA);
+    uiF.ESTATUS_SIN_ESTRUCTURA_LABEL === 'Sin estructura'
+      ? ok('filtro estatus: etiqueta visible "Sin estructura"')
+      : fail('filtro estatus: la etiqueta visible es "' + uiF.ESTATUS_SIN_ESTRUCTURA_LABEL + '"');
+    uiF.estatusFiltroValor({ estatus_estructura: '' }) === uiF.ESTATUS_SIN_ESTRUCTURA
+      ? ok('filtro estatus: un municipio sin estatus usa el centinela')
+      : fail('filtro estatus: un municipio sin estatus NO usa el centinela');
+    uiF.estatusFiltroValor({ estatus_estructura: null }) === uiF.ESTATUS_SIN_ESTRUCTURA
+      ? ok('filtro estatus: estatus null también usa el centinela')
+      : fail('filtro estatus: estatus null NO usa el centinela');
+    uiF.estatusFiltroValor({ estatus_estructura: 'Comité Directivo Municipal' }) === 'Comité Directivo Municipal'
+      ? ok('filtro estatus: un municipio con estatus conserva su valor')
+      : fail('filtro estatus: un municipio con estatus NO conserva su valor');
+    uiF.filterValueLabel('estatus_estructura', uiF.ESTATUS_SIN_ESTRUCTURA) === 'Sin estructura'
+      ? ok('filtro estatus: el tag/chip muestra "Sin estructura" (no el centinela)')
+      : fail('filtro estatus: el tag/chip muestra "' + uiF.filterValueLabel('estatus_estructura', uiF.ESTATUS_SIN_ESTRUCTURA) + '"');
+    uiF.filterValueLabel('distrito_local', uiF.ESTATUS_SIN_ESTRUCTURA) === uiF.ESTATUS_SIN_ESTRUCTURA
+      ? ok('filtro estatus: la etiqueta solo cambia en el filtro de estatus')
+      : fail('filtro estatus: la etiqueta se cambió en otro filtro');
+    if (fileData) {
+      const sinEstatus = fileData.filter(m => !(m.estatus_estructura || '').trim());
+      sinEstatus.length
+        ? ok('dato: ' + sinEstatus.length + ' municipios con estatus_estructura vacio (opción "Sin estructura")')
+        : warn('ningún municipio con estatus_estructura vacio: la opción "Sin estructura" no devolverá resultados');
+      // estatusFiltroOpciones usa allData: se evalúa con los datos reales.
+      const opcionesReales = new Function('allData', jsSource.slice(desdeF, hastaF) +
+        '\nreturn estatusFiltroOpciones();')(fileData);
+      opcionesReales.includes(uiF.ESTATUS_SIN_ESTRUCTURA)
+        ? ok('filtro estatus: el desplegable ofrece "Sin estructura"')
+        : fail('filtro estatus: el desplegable NO ofrece "Sin estructura"');
+      opcionesReales.filter(v => v === uiF.ESTATUS_SIN_ESTRUCTURA).length === 1
+        ? ok('filtro estatus: "Sin estructura" aparece una sola vez en el desplegable')
+        : fail('filtro estatus: "Sin estructura" aparece duplicada en el desplegable');
+      const etiquetas = new Function('allData', jsSource.slice(desdeF, hastaF) +
+        '\nreturn estatusFiltroEtiquetas();')(fileData);
+      etiquetas[uiF.ESTATUS_SIN_ESTRUCTURA] === 'Sin estructura'
+        ? ok('filtro estatus: el desplegable etiqueta "Sin estructura" con texto legible')
+        : fail('filtro estatus: el desplegable no etiqueta "Sin estructura"');
+    }
 
     // El JSON ya trae % reales: pctValue() no debe escalar NUNCA (ahi estaba el
     // error que convertia un 0.39% real en 39%).

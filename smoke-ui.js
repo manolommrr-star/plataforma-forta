@@ -8,8 +8,15 @@ function el(id) {
     id: id || '', _html: '', textContent: '', value: '', style: {}, children: [],
     classList: { _s: new Set(), add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); }, toggle(c, on) { on ? this._s.add(c) : this._s.delete(c); }, contains(c) { return this._s.has(c); } },
     addEventListener() {}, setAttribute() {}, getAttribute() { return null; }, focus() {}, click() {},
-    appendChild(c) { this.children.push(c); }, removeChild() {}, querySelector() { return el(); },
+    appendChild(c) { this.children.push(c); }, removeChild() {}, querySelector(sel) { return el(); },
     querySelectorAll() { return []; }, closest() { return null; }, getContext() { return {}; }
+  };
+  // querySelector estable: el mismo selector devuelve siempre el mismo hijo,
+  // para poder inspeccionar el HTML generado (opciones, tags, chips).
+  e._sel = {};
+  e.querySelector = function(sel) {
+    if (!e._sel[sel]) e._sel[sel] = el();
+    return e._sel[sel];
   };
   Object.defineProperty(e, 'innerHTML', {
     get() { return e._html; },
@@ -18,9 +25,11 @@ function el(id) {
   return e;
 }
 const byId = {};
+// Elementos creados durante el render (para inspeccionar el HTML generado).
+const created = [];
 const document = {
   getElementById(id) { return byId[id] || (byId[id] = el(id)); },
-  createElement() { return el(); },
+  createElement() { const e = el(); created.push(e); return e; },
   querySelector() { return el(); },
   querySelectorAll() { return []; },
   addEventListener() {},
@@ -34,13 +43,15 @@ const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 if (html.includes('id="municipios-data"')) { console.log(' FAIL index.html aún trae datos embebidos'); process.exit(1); }
 // UNICA fuente: data/municipios.json (lo mismo que fetch() carga en el navegador)
 const dataJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'municipios.json'), 'utf8'));
+// data/usuarios.json: origen de `municipios_adicionales` (municipios compartidos)
+const usersJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'usuarios.json'), 'utf8'));
 const fakeFetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(dataJson) });
 
 const js = fs.readFileSync(path.join(__dirname, 'dashboard.js'), 'utf8');
-const run = new Function('document', 'window', 'alert', 'location', 'URL', 'Blob', 'fetch', 'seedData',
-  js + '\n;initData(seedData);\n' +
-  'return { allData: () => allData, filteredData: () => filteredData, openDetail, renderList, tableSearch: () => tableSearchTerm, search: term => allData.filter(m => matchesGlobalSearch(m, term)) };');
-const api = run(document, window, alert, { href: '' }, { createObjectURL: () => '', revokeObjectURL: () => {} }, function () {}, fakeFetch, dataJson);
+const run = new Function('document', 'window', 'alert', 'location', 'URL', 'Blob', 'fetch', 'seedData', 'seedUsers',
+  js + '\n;buildCoordinatorScopeMap(seedUsers);\ninitData(seedData);\n' +
+  'return { allData: () => allData, filteredData: () => filteredData, openDetail, renderList, tableSearch: () => tableSearchTerm, search: term => allData.filter(m => matchesGlobalSearch(m, term)), coordinadores: () => coordinadoresFiltrables(), filtrarPorCoordinador: nombre => { activeFilters.coordinador = new Set([nombre]); applyFilters(); return filteredData.map(m => m["numero de municipio"]); }, estatusValores: () => estatusFiltroOpciones(), filtrarPorEstatus: valor => { Object.keys(activeFilters).forEach(k => activeFilters[k].clear()); activeFilters.estatus_estructura = new Set([valor]); updateFilterUI(); applyFilters(); return filteredData.map(m => m["numero de municipio"]); }, etiquetaFiltro: (k, v) => filterValueLabel(k, v), opcionesEstatusHTML: () => document.getElementById("filter-estatus").querySelector(".options-list").children.map(c => c.innerHTML), tagsEstatus: () => { const c = document.getElementById("filter-estatus"); if (c._updateTags) c._updateTags(); return c.querySelector(".tags-container").children.map(t => t.textContent); }, chipsHTML: () => document.getElementById("active-filters-bar").children.map(c => c.innerHTML) };');
+const api = run(document, window, alert, { href: '' }, { createObjectURL: () => '', revokeObjectURL: () => {} }, function () {}, fakeFetch, dataJson, usersJson);
 
 let fallos = 0;
 const ok = m => console.log('  OK  ' + m);
@@ -61,6 +72,147 @@ const hasGeneral = html.indexOf('id="table-search"') >= 0;
 const hasNames = html.indexOf('id="person-search"') >= 0;
 check(hasGeneral && hasNames, 'doble buscador: ids table-search y person-search presentes');
 check(js.indexOf('matchesNamesSearch') >= 0 && js.indexOf('personSearchTerm') >= 0, 'doble buscador: matcher de nombres y termino personSearchTerm presentes');
+
+// ---------- Filtro "Coordinador de zona" + municipios COMPARTIDOS ----------
+// Un coordinador puede tener `municipios_adicionales` (municipios de la zona de
+// otro coordinador a los que tambien tiene acceso). Compartir NO cambia el
+// coordinador_zona del municipio, asi que el filtro debe incluir esos
+// municipios cuando se selecciona al coordinador que los tiene compartidos.
+{
+  const nameCase = s => String(s || '').trim().split(/\s+/).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  const coordUsers = usersJson.usuarios.filter(u => u.rol === 'coordinador');
+  const conExtra = coordUsers.filter(u => (u.municipios_adicionales || []).length);
+  check(conExtra.length > 0, 'dato: hay coordinadores con municipios compartidos (municipios_adicionales)');
+
+  const cj = conExtra[0];
+  const cjName = nameCase(cj.nombre);
+  const zona = cj.municipios || [];
+  const extra = cj.municipios_adicionales || [];
+
+  // El coordinador debe aparecer en el desplegable del filtro.
+  check(api.coordinadores().includes(cjName),
+      'filtro coordinador: ' + cj.usuario + ' aparece en el desplegable');
+
+  // Filtrar por el coordinador debe devolver zona + compartidos.
+  const res = api.filtrarPorCoordinador(cjName);
+  check(zona.every(n => res.includes(n)),
+      'filtro coordinador: incluye los ' + zona.length + ' municipios de zona de ' + cj.usuario);
+  check(extra.every(n => res.includes(n)),
+      'filtro coordinador: incluye los ' + extra.length + ' municipios COMPARTIDOS de ' + cj.usuario);
+  check(res.length === new Set([...zona, ...extra]).size,
+      'filtro coordinador: exactamente zona + compartidos (' + res.length + ' municipios)');
+
+  // Los compartidos NO son de su zona: su coordinador_zona es otro.
+  const extraMunis = extra.map(n => dataJson.find(m => m['numero de municipio'] === n)).filter(Boolean);
+  check(extraMunis.length === extra.length, 'dato: los municipios compartidos existen en municipios.json');
+  check(extraMunis.every(m => nameCase(m.coordinador_zona) !== cjName),
+      'dato: los municipios compartidos pertenecen a la zona de OTRO coordinador');
+  check(extraMunis.every(m => res.includes(m['numero de municipio'])),
+      'filtro coordinador: los compartidos salen aunque su coordinador_zona sea otro');
+
+  // Un municipio compartido debe salir tanto al filtrar por su coordinador ZONAL
+  // como por el coordinador que lo tiene compartido. Y NO debe salir al filtrar
+  // por un coordinador sin relacion con ese municipio.
+  const zonaDeCompartidos = nameCase(extraMunis[0].coordinador_zona);
+  const duenio = coordUsers.find(u => nameCase(u.nombre) === zonaDeCompartidos);
+  if (duenio) {
+    const res2 = api.filtrarPorCoordinador(zonaDeCompartidos);
+    check(extra.every(n => res2.includes(n)),
+        'filtro coordinador: los compartidos tambien salen al filtrar por su coordinador zonal');
+  }
+  const ajeno = coordUsers.find(u =>
+      nameCase(u.nombre) !== cjName && nameCase(u.nombre) !== zonaDeCompartidos &&
+      !(u.municipios || []).includes(extra[0]) && !(u.municipios_adicionales || []).includes(extra[0]));
+  if (ajeno) {
+    const res3 = api.filtrarPorCoordinador(nameCase(ajeno.nombre));
+    check(!res3.includes(extra[0]),
+        'filtro coordinador: un coordinador sin relacion NO ve el municipio compartido');
+  }
+
+  // Al seleccionar varios coordinadores, el resultado es la union.
+  api.filtrarPorCoordinador(cjName);
+  const res4 = api.filtrarPorCoordinador(cjName);
+  check(res4.length === res.length, 'filtro coordinador: el filtro es estable entre llamadas');
+}
+
+// ---------- Filtro "Estatus de Estructura": opcion "Sin estructura" ----------
+// Los municipios sin estructura vienen con `estatus_estructura` vacio. El
+// desplegable debe ofrecer una opcion virtual "Sin estructura" (centinela
+// __sin_estructura__) que, al filtrar, devuelva exactamente esos municipios.
+{
+  const SIN = '__sin_estructura__';
+  const sinEstatus = dataJson.filter(m => !(m.estatus_estructura || '').trim());
+  check(sinEstatus.length > 0,
+      'dato: hay municipios con estatus_estructura vacio (' + sinEstatus.length + ')');
+
+  const opciones = api.estatusValores();
+  check(opciones.includes(SIN),
+      'filtro estatus: el desplegable incluye la opcion "Sin estructura"');
+  check(opciones.includes('Comité Directivo Municipal'),
+      'filtro estatus: el desplegable conserva los estatus reales');
+  check(new Set(opciones).size === opciones.length,
+      'filtro estatus: no hay opciones duplicadas');
+  check(opciones.filter(v => v === SIN).length === 1,
+      'filtro estatus: la opcion "Sin estructura" aparece una sola vez');
+
+  // La etiqueta visible debe ser "Sin estructura" (no el centinela interno).
+  check(api.etiquetaFiltro('estatus_estructura', SIN) === 'Sin estructura',
+      'filtro estatus: la etiqueta visible es "Sin estructura"');
+  check(api.etiquetaFiltro('estatus_estructura', 'Comité Directivo Municipal') === 'Comité Directivo Municipal',
+      'filtro estatus: los estatus reales conservan su etiqueta');
+  check(api.etiquetaFiltro('distrito_local', SIN) === SIN,
+      'filtro estatus: la etiqueta solo cambia para estatus_estructura');
+
+  // Filtrar por "Sin estructura" devuelve exactamente esos municipios.
+  const res = api.filtrarPorEstatus(SIN);
+  const esperados = sinEstatus.map(m => m['numero de municipio']).sort((a, b) => a - b);
+  check(res.length === sinEstatus.length,
+      'filtro estatus: "Sin estructura" devuelve ' + res.length + ' municipios (esperados ' + sinEstatus.length + ')');
+  check(JSON.stringify(res.slice().sort((a, b) => a - b)) === JSON.stringify(esperados),
+      'filtro estatus: "Sin estructura" devuelve exactamente los municipios sin estatus');
+
+  // Filtrar por un estatus real NO incluye los que no lo tienen.
+  const resCdm = api.filtrarPorEstatus('Comité Directivo Municipal');
+  const cdm = dataJson.filter(m => (m.estatus_estructura || '').trim() === 'Comité Directivo Municipal');
+  check(resCdm.length === cdm.length,
+      'filtro estatus: "Comité Directivo Municipal" devuelve ' + resCdm.length + ' municipios (esperados ' + cdm.length + ')');
+  check(!resCdm.some(n => sinEstatus.some(m => m['numero de municipio'] === n)),
+      'filtro estatus: los municipios sin estructura NO salen al filtrar por un estatus real');
+
+  // Un estatus inexistente no devuelve nada.
+  check(api.filtrarPorEstatus('__estatus_inexistente__').length === 0,
+      'filtro estatus: un estatus inexistente devuelve 0 municipios');
+
+  // ---------- HTML VISIBLE: el usuario debe ver "Sin estructura" ----------
+  // El desplegable, el tag del drawer y el chip de filtro activo deben mostrar
+  // el texto legible "Sin estructura", nunca el centinela interno.
+  api.filtrarPorEstatus(SIN);   // deja el filtro "Sin estructura" activo
+  const opHtml = api.opcionesEstatusHTML();
+  const opSin = opHtml.find(h => h.includes('__sin_estructura__'));
+  check(!!opSin, 'filtro estatus: el desplegable renderiza la opcion "Sin estructura"');
+  check(!!opSin && opSin.includes('>Sin estructura<'),
+      'filtro estatus: el desplegable muestra el texto "Sin estructura"');
+  check(opHtml.some(h => h.includes('Comité Directivo Municipal')),
+      'filtro estatus: el desplegable muestra los estatus reales con su texto');
+  check(!opHtml.some(h => h.includes('__sin_estructura__') && h.includes('>__sin_estructura__<')),
+      'filtro estatus: el desplegable NO muestra el centinela interno al usuario');
+
+  const tags = api.tagsEstatus();
+  check(tags.includes('Sin estructura'),
+      'filtro estatus: el tag del filtro muestra "Sin estructura"');
+  check(!tags.some(t => t.includes('__sin_estructura__')),
+      'filtro estatus: el tag del filtro NO muestra el centinela interno');
+
+  const chips = api.chipsHTML();
+  check(chips.some(c => c.includes('Sin estructura')),
+      'filtro estatus: el chip de filtro activo muestra "Sin estructura"');
+  check(!chips.some(c => c.includes('__sin_estructura__')),
+      'filtro estatus: el chip de filtro activo NO muestra el centinela interno');
+}
+
+// El chip del filtro activo debe mostrar la etiqueta del grupo (no "undefined").
+check(js.indexOf("coordinador: 'Coordinador'") >= 0,
+    'filtro coordinador: FILTER_GROUP_LABELS incluye la clave "coordinador"');
 
 // Coordinador: solo la barra de busqueda general, limitada a SUS municipios.
 // Se simula el modo coordinador (fortaSoloBusquedaGeneral + fortaScope) y se

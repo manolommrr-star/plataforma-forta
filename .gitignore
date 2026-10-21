@@ -20,5 +20,8 @@ node_modules/
 tools/_*.txt
 tools/*.png
 
+# Credenciales reales de los coordinadores (NO se suben)
+tools/_coord-pw.json
+
 # Perfil de Chrome para depuracion remota (CDP)
 .chrome-cdp/
