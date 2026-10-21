@@ -10,7 +10,8 @@ let charts = {};
 const activeFilters = {
     distrito_local: new Set(),
     distrito_federal: new Set(),
-    estatus_estructura: new Set()
+    estatus_estructura: new Set(),
+    coordinador: new Set()
 };
 
 // Establece texto en el banner de contadores solo si existe (puede no estar en el DOM)
@@ -71,6 +72,9 @@ function initFilters() {
         populateMultiSelect('filter-estatus',
         Array.from(new Set(allData.map(m => m.estatus_estructura))).filter(v => v).sort(),
         'estatus_estructura');
+        populateMultiSelect('filter-coordinador',
+        Array.from(new Set(allData.map(m => nameCase(m.coordinador_zona)))).filter(v => v).sort(),
+        'coordinador');
 }
 
 function populateMultiSelect(containerId, options, filterKey) {
@@ -208,6 +212,7 @@ function applyFilters() {
         if (activeFilters.distrito_local.size > 0 && !activeFilters.distrito_local.has(m.distrito_local)) return false;
         if (activeFilters.distrito_federal.size > 0 && !activeFilters.distrito_federal.has(m.distrito_federal)) return false;
         if (activeFilters.estatus_estructura.size > 0 && !activeFilters.estatus_estructura.has(m.estatus_estructura)) return false;
+        if (activeFilters.coordinador.size > 0 && !activeFilters.coordinador.has(nameCase(m.coordinador_zona))) return false;
         return true;
     });
     // Orden alfabetico por nombre de municipio
@@ -684,10 +689,10 @@ function openDetail(id) {
     // duplicado que reusaba los mismos IDs de canvas pie-i-N y pisaba los
     // pasteles; se elimino.)
 
-    // Estructura Electoral: listado nominal, secciones, casillas, rutas, ediles
+    // Electoral: listado nominal, secciones, casillas, rutas, ediles
     // y distritos. (Sube aqui a peticion: ahora va ANTES de Organizacion
     // partidista, y Localidades va antes que ella.)
-    html += '<div class="detail-section"><h3>Estructura Electoral</h3>';
+    html += '<div class="detail-section"><h3>Electoral</h3>';
     html += '<div class="detail-grid">';
     html += detailItem('Listado Nominal', formatNum(m.listado_nominal), 'big');
     html += detailItem('Secciones', formatNum(m.secciones), 'big');

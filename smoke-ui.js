@@ -94,10 +94,10 @@ const d = byId['detail-content'].innerHTML;
 check(d.includes('Organizaci\u00f3n partidista'), 'detalle: seccion Organizacion partidista');
 check(d.includes('Dirigentes del municipio'), 'detalle: seccion Dirigentes del municipio');
 check(!d.includes('Fecha de nacimiento'), 'detalle: fecha de nacimiento del secretario eliminada del dashboard');
-check(d.indexOf('Localidades') >= 0 && d.indexOf('Localidades') < d.indexOf('Estructura Electoral'), 'detalle: Localidades va ANTES de Estructura Electoral (prioridad)');
-check(d.indexOf('Estructura Electoral') >= 0 && d.indexOf('Estructura Electoral') < d.indexOf('Organizaci\u00f3n partidista'), 'detalle: Estructura Electoral va ANTES de Organizacion partidista');
+check(d.indexOf('Localidades') >= 0 && d.indexOf('Localidades') < d.indexOf('Electoral'), 'detalle: Localidades va ANTES de Electoral (prioridad)');
+check(d.indexOf('Electoral') >= 0 && d.indexOf('Electoral') < d.indexOf('Organizaci\u00f3n partidista'), 'detalle: Electoral va ANTES de Organizacion partidista');
 check(!d.includes('Resultados electorales'), 'detalle: seccion Resultados electorales ELIMINADA (la cubren las graficas de votos por partido)');
-check(d.includes('Representaci\u00f3n del partido'), 'detalle: seccion Representacion del partido');
+check(d.includes('Gobierno'), 'detalle: seccion Gobierno');
 check(d.includes('Coordinador de zona'), 'detalle: Coordinador de zona');
 check(d.includes('Secretario general'), 'detalle: Secretario general');
 check(d.includes('228 853 3676'), 'detalle: telefono del presidente');
@@ -172,15 +172,15 @@ check(d8.includes('Regidores del PAN') && d8.includes('people-details'),
     'detalle: Regidores del PAN como desplegable compacto');
 check(d8.includes('Consejero estatal') && d8.includes('people-details'),
     'detalle: Consejero estatal como desplegable compacto');
-const d8Rep = d8.slice(d8.indexOf('Representaci'));
+const d8Rep = d8.slice(d8.indexOf('Gobierno'));
 check(d8Rep.indexOf('Regidores del PAN') > d8Rep.indexOf('(PP) Presidente Municipal') &&
       d8Rep.indexOf('Consejero estatal') > d8Rep.indexOf('Regidores del PAN'),
-    'detalle: Regidores y Consejero mantienen su posicion en Representacion');
+    'detalle: Regidores y Consejero mantienen su posicion en Gobierno');
 check(/Regidores del PAN[\s\S]*?loc-count">\d+</.test(d8Rep),
     'detalle: Regidores muestra contador de personas');
 check(/Consejero estatal[\s\S]*?loc-count">\d+</.test(d8Rep),
     'detalle: Consejero muestra contador de personas');
-check(d8.includes('Juventino Gallegos') && d8.includes('MARTINEZ SARMIENTO'),
+check(d8.includes('Juventino Gallegos') && d8.includes('Martinez Sarmiento'),
     'detalle: nombres de Regidores y Consejero visibles al desplegar');
 api.openDetail(1);   // ACAJETE: EL ENCINAL II -> EL ENCINAL (no hay base local, no colapsa)
 const d1 = byId['detail-content'].innerHTML;
