@@ -12,12 +12,12 @@ const BASE = path.join(__dirname, '..');
 
 const PALABRAS = ['casa', 'sol', 'mar', 'luna', 'rio', 'vida', 'flor', 'tono',
     'piedra', 'viento', 'hielo', 'arena', 'palma', 'osbo', 'nieve', 'grano'];
-const rnd = (n = 4) => Math.floor(Math.random() * 10 ** n).toString().padStart(n, '0');
-
+const rnd = (n = 3) => Math.floor(Math.random() * 10 ** n).toString().padStart(n, '0');
 function generaPassword() {
     const a = PALABRAS[Math.floor(Math.random() * PALABRAS.length)];
-    const b = PALABRAS[Math.floor(Math.random() * PALABRAS.length)];
-    return `${a}.${b}.${rnd(4)}${rnd(4)}`;
+    let b = PALABRAS[Math.floor(Math.random() * PALABRAS.length)];
+    while (b === a) b = PALABRAS[Math.floor(Math.random() * PALABRAS.length)];
+    return `${a}.${b}.${rnd(3)}`;
 }
 
 function sha256(text) { return crypto.createHash('sha256').update(text, 'utf8').digest('hex'); }
