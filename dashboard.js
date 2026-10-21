@@ -42,7 +42,7 @@ function initData(data) {
             if (!m.metadata) m.metadata = {};
         });
 
-        setSubtitle(allData.length + ' municipios cargados · Panel de Fortalecimiento Interno');
+        setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
         initFilters();
         applyFilters();
 }
@@ -286,7 +286,6 @@ function formatPct(v) {
 // Etiquetas legibles para la exportación y para el bloque "Otros datos"
 var FIELD_LABELS = {
     'numero de municipio': 'N.º de municipio',
-    'zona': 'Zona',
     'coordinador_zona': 'Coordinador de zona',
     'prioridad': 'Prioridad',
     'municipio': 'Municipio',
@@ -311,7 +310,7 @@ var FIELD_LABELS = {
     'militantes': 'Militantes',
     'consejero_estatal': 'Consejero estatal',
     'estatus_estructura': 'Estatus de estructura',
-    'soldados': 'Soldados',
+    'soldados': 'Meta soldados dic (2026)',
     'meta_afiliados': 'Meta afiliados',
     'vigencia': 'Vigencia',
     'presidente_estructura': 'Presidente de estructura',
@@ -403,6 +402,29 @@ function matchesNamesSearch(m, term) {
 
 function escapeHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Normaliza un nombre de persona: primera letra mayuscula y el resto minusculas
+// por cada palabra (ej. "FELIPE LOPEZ" -> "Felipe Lopez", "MARIA DEL CARMEN" -> "Maria Del Carmen").
+function nameCase(s) {
+    if (s == null) return '';
+    return String(s)
+        .trim()
+        .split(/\s+/)
+        .map(function(p) {
+            if (!p) return '';
+            return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+        })
+        .join(' ');
+}
+
+// Extrae solo el nombre de una cadena tipo "PARTIDO - Nombre Apellido" y lo normaliza.
+// Si no hay guion, devuelve toda la cadena normalizada.
+function personName(v) {
+    var s = String(v == null ? '' : v);
+    var i = s.lastIndexOf('-');
+    var nombre = (i >= 0 ? s.slice(i + 1) : s).trim();
+    return nameCase(nombre);
 }
 
 function formatNum(v) {
@@ -527,7 +549,7 @@ function detailPeopleList(label, raw, icon) {
     out += '<details>';
     out += '<summary class="loc-toggle people-toggle"><i data-lucide="' + icon + '"></i><span class="loc-toggle__t">' + label + '</span> <span class="loc-count">' + nombres.length + '</span></summary>';
     out += '<div class="loc-list">';
-    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(n) + '</div>'; });
+    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(nameCase(n)) + '</div>'; });
     out += '</div></details></div>';
     return out;
 }
@@ -584,7 +606,6 @@ function openDetail(id) {
     html += '</div>';
     html += '</div>';
     html += '<div class="detail-hero-chips">';
-    if (m.zona != null) html += '<span class="hero-chip">Zona ' + escapeHtml(String(m.zona)) + '</span>';
     if (est) html += '<span class="hero-chip">' + escapeHtml(estatusShort(est)) + '</span>';
     if (m.distrito_local) html += '<span class="hero-chip">DL: ' + escapeHtml(String(m.distrito_local)) + '</span>';
     if (m.distrito_federal) html += '<span class="hero-chip">DF: ' + escapeHtml(String(m.distrito_federal)) + '</span>';
@@ -633,7 +654,7 @@ function openDetail(id) {
     // Fila de contacto ligera: nombre con enfasis + numero que abre menu Marcar/WhatsApp
     function contactRow(role, name, gender, phone) {
         var tel = phoneTel(phone || '');
-        var safeName = escapeHtml(name || 'Sin asignar');
+        var safeName = escapeHtml(nameCase(name) || 'Sin asignar');
         var safePhone = escapeHtml(phone || '');
         var jsName = String(name || role).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var jsPhone = String(phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -684,9 +705,8 @@ function openDetail(id) {
 
     // Organización partidista: coordinador, zona, fuerza territorial, estatus y vigencia
     html += '<div class="detail-section"><h3>Organización partidista</h3><div class="detail-grid">';
-    html += detailItem('Coordinador de zona', m.coordinador_zona || '', '', true);
-    html += detailItem('Zona', m.zona != null ? m.zona : '', 'big');
-    html += detailItem('Soldados', formatNum(m.soldados), 'big');
+    html += detailItem('Coordinador de zona', nameCase(m.coordinador_zona) || '', '', true);
+    html += detailItem('Meta soldados dic (2026)', formatNum(m.soldados), 'big');
     html += detailItem('Meta de afiliados', formatNum(m.meta_afiliados), 'big');
     html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim', true);
     html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim', true);
@@ -697,17 +717,17 @@ function openDetail(id) {
     // "Votos por partido" (desde los SEE). Los campos votos_2024_* / pct_* siguen
     // intactos en el JSON y en la exportacion; aqui solo no se pintan.
 
-    // Representación del partido (del Excel)
+    // Gobierno (del Excel)
     var ppFed = m.pp_diputado_federal || '';
     var ppLoc = m.pp_diputado_local || '';
     var ppPre = m.pp_presidente_municipal || '';
     var ediles = m.regidores_pan || '';
     var consejero = m.consejero_estatal || '';
     if (ppFed || ppLoc || ppPre || ediles || consejero) {
-        html += '<div class="detail-section"><h3>Representación del partido</h3><div class="detail-grid">';
-        html += detailItem('(PP) Diputado Federal', ppFed, ppFed ? '' : 'dim', true);
-        html += detailItem('(PP) Diputado Local', ppLoc, ppLoc ? '' : 'dim', true);
-        html += detailItem('(PP) Presidente Municipal', ppPre, ppPre ? '' : 'dim', true);
+        html += '<div class="detail-section"><h3>Gobierno</h3><div class="detail-grid">';
+        html += detailItem('(PP) Diputado Federal', personName(ppFed), ppFed ? '' : 'dim', true);
+        html += detailItem('(PP) Diputado Local', personName(ppLoc), ppLoc ? '' : 'dim', true);
+        html += detailItem('(PP) Presidente Municipal', personName(ppPre), ppPre ? '' : 'dim', true);
         html += detailPeopleList('Regidores del PAN', ediles, 'users');
         html += detailPeopleList('Consejero estatal', consejero, 'badge-check');
         html += '</div></div>';
@@ -745,7 +765,7 @@ function openDetail(id) {
     }
 
     html += '<div class="detail-footer">' +
-        '<span>Panel de Fortalecimiento Interno</span>' +
+        '<span>Plataforma Forta 2026</span>' +
         '<span class="detail-footer-sep">·</span>' +
         '<span>Municipio ' + m['numero de municipio'] + ' de 212</span>' +
         '</div>';
@@ -1003,7 +1023,7 @@ document.getElementById('person-search').addEventListener('input', function(e) {
 function buildAndOpenExport(filenameBase) {
     if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
     var keys = Object.keys(filteredData[0]).filter(function(k) {
-        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos', 'zona'].indexOf(k) === -1;
     });
     var headers = keys.map(fieldLabel);
     var rows = filteredData.map(function(m) {
