@@ -19,6 +19,21 @@ function showError(msg) {
     el.hidden = false;
 }
 
+// Alcance de municipios de un usuario:
+//   - `municipios`            -> municipios de su zona (coordinador)
+//   - `municipios_adicionales`-> municipios compartidos con el (acceso extra)
+// Ambos se combinan en una sola lista; null = sin restriccion (admin/consulta).
+// Compartir acceso NO cambia la zona del municipio en data/municipios.json.
+function alcanceMunicipios(user) {
+    const zona = Array.isArray(user && user.municipios) ? user.municipios : null;
+    const extra = Array.isArray(user && user.municipios_adicionales) ? user.municipios_adicionales : [];
+    if (!zona && !extra.length) return null;
+    const set = {};
+    (zona || []).forEach(n => { set[n] = true; });
+    extra.forEach(n => { set[n] = true; });
+    return Object.keys(set).map(Number).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+}
+
 function setLoading(on) {
     const btn = document.getElementById('login-submit');
     btn.disabled = on;
@@ -40,11 +55,14 @@ async function handleLogin(ev) {
         if (!found || found.activo === false) { showError('Usuario no encontrado o inactivo.'); return; }
         const hash = await sha256(password);
         if (hash !== found.password_sha256) { showError('Contraseña incorrecta.'); return; }
+        // Alcance: municipios de su zona + municipios adicionales compartidos
+        // (acceso compartido con otro coordinador; NO cambia la zona del municipio).
+        const alcance = alcanceMunicipios(found);
         const session = {
             usuario: found.usuario,
             nombre: found.nombre || found.usuario,
             rol: found.rol || 'consulta',
-            municipios: Array.isArray(found.municipios) ? found.municipios : null,
+            municipios: alcance,
             loginAt: Date.now()
         };
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));

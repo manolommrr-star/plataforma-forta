@@ -62,6 +62,33 @@ const hasNames = html.indexOf('id="person-search"') >= 0;
 check(hasGeneral && hasNames, 'doble buscador: ids table-search y person-search presentes');
 check(js.indexOf('matchesNamesSearch') >= 0 && js.indexOf('personSearchTerm') >= 0, 'doble buscador: matcher de nombres y termino personSearchTerm presentes');
 
+// Coordinador: solo la barra de busqueda general, limitada a SUS municipios.
+// Se simula el modo coordinador (fortaSoloBusquedaGeneral + fortaScope) y se
+// comprueba que el buscador de nombres NO filtra y que el alcance se respeta.
+check(html.indexOf('id="person-search-box"') >= 0, 'coordinador: caja del buscador de nombres con id person-search-box');
+check(js.indexOf('fortaSoloBusquedaGeneral') >= 0, 'coordinador: bandera fortaSoloBusquedaGeneral presente');
+{
+  const coordMunis = [1, 2, 3];                       // alcance simulado
+  const coordApi = new Function('document', 'window', 'alert', 'location', 'URL', 'Blob', 'fetch', 'seedData',
+    js + '\n;fortaScope = ' + JSON.stringify(coordMunis) + ';' +
+    'initData(seedData);' +
+    'fortaSoloBusquedaGeneral = true;' +
+    'return { allData: () => allData, filteredData: () => filteredData, renderList, list: () => byIdHTML() };')(
+    document, window, alert, { href: '' }, { createObjectURL: () => '', revokeObjectURL: () => {} }, function () {}, fakeFetch, dataJson);
+  check(coordApi.allData().length === coordMunis.length,
+    'coordinador: solo se cargan SUS municipios (' + coordApi.allData().length + ')');
+  check(coordApi.allData().every(m => coordMunis.indexOf(m['numero de municipio']) >= 0),
+    'coordinador: ningun municipio fuera de su alcance');
+  // El buscador de nombres ya no filtra: un nombre de persona no reduce la lista.
+  const before = coordApi.filteredData().length;
+  const personOnly = coordApi.allData().find(m => m.presidente_estructura || m.secretario_general);
+  check(!!personOnly, 'coordinador: hay municipio con persona (para probar el buscador de nombres)');
+  coordApi.renderList();
+  const cardsCoord = byId['muni-list'].children.length;
+  check(cardsCoord === Math.min(20, before),
+    'coordinador: la lista no se reduce por el buscador de nombres (' + cardsCoord + ' tarjetas)');
+}
+
 api.openDetail(1);
 const d = byId['detail-content'].innerHTML;
 check(d.includes('Organizaci\u00f3n partidista'), 'detalle: seccion Organizacion partidista');

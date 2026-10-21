@@ -23,6 +23,9 @@ function setSubtitle(text) {
 // Requiere servirse por http(s) (ej. npx serve .). No funciona con file:// por CORS.
 // Rol coordinador: solo ve los municipios de su zona (lista en la sesión).
 var fortaScope = null; // numeros de municipio permitidos (null = todos)
+// Coordinador: solo ve la barra de busqueda general (que ya queda limitada a
+// SUS municipios por fortaScope). El buscador de nombres se oculta.
+var fortaSoloBusquedaGeneral = false;
 
 function initData(data) {
     if (Array.isArray(fortaScope) && fortaScope.length) {
@@ -410,7 +413,12 @@ function renderList() {
     var listEl = document.getElementById('muni-list');
     var loadBtn = document.getElementById('load-more-btn');
     listEl.innerHTML = '';
-    var data = filteredData.filter(function(m) { return matchesGlobalSearch(m, tableSearchTerm) && matchesNamesSearch(m, personSearchTerm); });
+    // Coordinador: solo la busqueda general (sobre SUS municipios).
+    var data = filteredData.filter(function(m) {
+        if (!matchesGlobalSearch(m, tableSearchTerm)) return false;
+        if (fortaSoloBusquedaGeneral) return true;
+        return matchesNamesSearch(m, personSearchTerm);
+    });
 
     if (data.length === 0) {
         listEl.innerHTML = '<div class="list-empty">No se encontraron municipios con los criterios seleccionados.</div>';
@@ -1226,6 +1234,28 @@ function downloadBlob(blob, filename) {
             // Abre el MISMO menú de exportar (descargar + WhatsApp).
             // Oculta el drawer de filtros y el boton exportar del drawer.
             var isCoord = (typeof fortaIsCoordinador === 'function') && fortaIsCoordinador(fortaSession);
+            // Coordinador: solo la barra de busqueda general. Se oculta el
+            // buscador de nombres (municipios o personas) COMPLETO: la caja y
+            // su input, para que no quede un campo de busqueda inutilizable.
+            if (isCoord) {
+                fortaSoloBusquedaGeneral = true;
+                var nameBox = document.getElementById('person-search-box');
+                if (nameBox) nameBox.style.display = 'none';
+                var nameInput = document.getElementById('person-search');
+                if (nameInput) {
+                    nameInput.value = '';
+                    nameInput.disabled = true;
+                    nameInput.setAttribute('aria-hidden', 'true');
+                }
+                personSearchTerm = '';
+                // El buscador general queda acotado a sus municipios: se avisa
+                // en el placeholder para que quede claro el alcance.
+                var generalInput = document.getElementById('table-search');
+                if (generalInput) {
+                    generalInput.placeholder = 'Buscar en mis municipios...';
+                    generalInput.title = 'Busca en los municipios de tu zona';
+                }
+            }
             var toggle = document.getElementById('menu-toggle');
             if (isCoord && toggle) {
                 toggle.innerHTML = '<i data-lucide="file-down"></i><span>Exportar Excel</span>';

@@ -12,6 +12,12 @@ const CHECK = process.argv.includes('--check');
 
 const sinAcentos = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const low = s => sinAcentos(s).toLowerCase().trim();
+// primera letra mayuscula, resto minuscula (ej. "FELIPE" -> "Felipe")
+const titulo = s => {
+    const t = low(s);
+    return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 
 function parseNombre(full) {
     // "FELIPE ALEJANDRO LÓPEZ GARCÍA" -> nombre:FELIPE, ap1:LÓPEZ, ap2:GARCÍA
@@ -31,11 +37,13 @@ data.forEach(m => {
 
 const nuevos = [];
 const problemas = [];
+const pwdClaro = {}; // usuario -> contraseña en claro (para el Excel)
 for (const [full, nums] of porCoord) {
     const p = parseNombre(full);
     if (!p) { problemas.push(full + ' (no tiene 2 apellidos)'); continue; }
-    const usuario = low(p.nombre) + '.' + low(p.ap1);
+    const usuario = titulo(p.nombre) + '.' + titulo(p.ap1);
     const password = low(p.ap1) + '.' + low(p.ap2);
+    pwdClaro[usuario] = password;
     nuevos.push({
         usuario, nombre: full, rol: 'coordinador',
         password_sha256: crypto.createHash('sha256').update(password, 'utf8').digest('hex'),
@@ -59,8 +67,23 @@ if (problemas.length) { console.error('\nHay problemas: corrígelos antes de esc
 const ujPath = path.join(BASE, 'data', 'usuarios.json');
 const uj = JSON.parse(fs.readFileSync(ujPath, 'utf8'));
 // reemplaza coordinadores previos, conserva admin/consulta/gabo/otros
+// Se preserva `municipios_adicionales` (acceso compartido con otro
+// coordinador): la regeneracion NO debe borrar esos municipios extra.
+const compartidos = new Map();
+uj.usuarios.filter(u => u.rol === 'coordinador').forEach(u => {
+    if (Array.isArray(u.municipios_adicionales) && u.municipios_adicionales.length) {
+        compartidos.set(u.usuario, u.municipios_adicionales);
+    }
+});
 uj.usuarios = uj.usuarios.filter(u => u.rol !== 'coordinador');
-nuevos.forEach(n => { const { _password_claro, ...pub } = n; uj.usuarios.push(pub); });
+nuevos.forEach(n => {
+    const { _password_claro, ...pub } = n;
+    const extra = compartidos.get(n.usuario);
+    if (extra) pub.municipios_adicionales = extra.slice().sort((a, b) => a - b);
+    uj.usuarios.push(pub);
+});
+// Guardar contraseñas en claro para el Excel (solo temporal)
+fs.writeFileSync(path.join(BASE, 'tools', '_coord-pw.json'), JSON.stringify(pwdClaro, null, 2) + '\n', 'utf8');
 uj.nota = 'Usuarios del Panel FORTA. Contraseñas en SHA-256 (node tools/hash-password.js). Coordinadores: user primer_nombre.primer_apellido, password primer_apellido.segundo_apellido, con acceso solo a sus municipios.';
 fs.writeFileSync(ujPath, JSON.stringify(uj, null, 2) + '\n', 'utf8');
 console.log('\nOK data/usuarios.json: ' + uj.usuarios.length + ' usuarios totales (' + nuevos.length + ' coordinadores).');

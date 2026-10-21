@@ -48,7 +48,7 @@ try {
   const loginJs = fs.readFileSync(path.join(BASE, 'login.js'), 'utf8');
   new Function(loginJs);
   ok('login.js sintaxis válida');
-  ['data/usuarios.json', 'password_sha256', 'forta_session', 'index.html'].forEach(s => {
+  ['data/usuarios.json', 'password_sha256', 'forta_session', 'index.html', 'alcanceMunicipios', 'municipios_adicionales'].forEach(s => {
     loginJs.includes(s) ? ok('login.js usa ' + s) : fail('login.js sin ' + s);
   });
   const authJs = fs.readFileSync(path.join(BASE, 'auth.js'), 'utf8');
@@ -73,6 +73,18 @@ try {
           const fuera = u.municipios.filter(n => !numsValidos.has(n));
           fuera.length ? fail('coordinador ' + u.usuario + ' con municipios inexistentes: ' + fuera.join(',')) : ok('coordinador ' + u.usuario + ': ' + u.municipios.length + ' municipios válidos');
         }
+        // Municipios compartidos (acceso extra; NO cambia la zona del municipio).
+        if (u.municipios_adicionales !== undefined) {
+          if (!Array.isArray(u.municipios_adicionales) || !u.municipios_adicionales.length) {
+            fail('coordinador ' + u.usuario + ': municipios_adicionales vacio o no-es-array');
+          } else {
+            const fueraExtra = u.municipios_adicionales.filter(n => !numsValidos.has(n));
+            if (fueraExtra.length) fail('coordinador ' + u.usuario + ' con municipios_adicionales inexistentes: ' + fueraExtra.join(','));
+            else ok('coordinador ' + u.usuario + ': ' + u.municipios_adicionales.length + ' municipios compartidos (válidos)');
+            const repetidos = u.municipios_adicionales.filter(n => (u.municipios || []).includes(n));
+            if (repetidos.length) warn('coordinador ' + u.usuario + ': municipios_adicionales repetidos en su zona: ' + repetidos.join(','));
+          }
+        }
       }
     });
   }
@@ -81,6 +93,14 @@ try {
   ['fortaScope', 'coordinadorExportDirecto', 'Exportar Excel', 'filters-sidebar'].forEach(s => {
     dashSrc.includes(s) ? ok('dashboard.js integra coordinador: ' + s) : fail('dashboard.js sin ' + s);
   });
+  // Coordinador: solo la barra de busqueda general (buscador de nombres oculto)
+  ['fortaSoloBusquedaGeneral', 'person-search-box'].forEach(s => {
+    dashSrc.includes(s) ? ok('dashboard.js: coordinador con solo busqueda general (' + s + ')') : fail('dashboard.js sin ' + s);
+  });
+  const idxSrc = fs.readFileSync(path.join(BASE, 'index.html'), 'utf8');
+  idxSrc.includes('id="person-search-box"')
+    ? ok('index.html: caja del buscador de nombres con id person-search-box (ocultable)')
+    : fail('index.html sin id="person-search-box"');
 } catch (e) {
   fail('archivos de login: ' + e.message);
 }

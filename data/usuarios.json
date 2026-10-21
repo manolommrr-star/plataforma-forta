@@ -7,31 +7,10 @@
   },
   "usuarios": [
     {
-      "usuario": "admin",
-      "nombre": "Administrador",
-      "rol": "admin",
-      "password_sha256": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
-      "activo": true
-    },
-    {
-      "usuario": "consulta",
-      "nombre": "Usuario de consulta",
-      "rol": "consulta",
-      "password_sha256": "7fa95c704c2defa7b1295d28bcddfd752bf9b594db18886dd64721183cfc47a5",
-      "activo": true
-    },
-    {
-      "usuario": "gabo",
-      "nombre": "Gabo",
-      "rol": "admin",
-      "password_sha256": "ba4d0b144b31cf2774ae66c495fb76e020e1e1a379d6e1d982e4153999edb610",
-      "activo": true
-    },
-    {
-      "usuario": "felipe.lopez",
-      "nombre": "FELIPE ALEJANDRO LÓPEZ GARCÍA",
+      "usuario": "Felipe.Lopez",
+      "nombre": "Felipe Alejandro López García",
       "rol": "coordinador",
-      "password_sha256": "acf1cdc61b18749488c9145a192fc99bac6a322aa31265406de7016bc6a85401",
+      "password_sha256": "425fd34e1b697fc489e907417ef6259188d4ce33034a64e4d176b4e6e2d4a05d",
       "activo": true,
       "municipios": [
         1,
@@ -56,10 +35,10 @@
       ]
     },
     {
-      "usuario": "marco.santamaria",
-      "nombre": "MARCO ANTONIO SANTAMARÍA RIVERA",
+      "usuario": "Marco.Santamaria",
+      "nombre": "Marco Antonio Santamaría Rivera",
       "rol": "coordinador",
-      "password_sha256": "793a9d9743b2c22ff5e2754fc889e64b48044cea775c5f887521f3f759cca274",
+      "password_sha256": "e48ec61b229b35e880dae016b3e90f4e690298794cd76406a1f22975e199358c",
       "activo": true,
       "municipios": [
         2,
@@ -88,10 +67,10 @@
       ]
     },
     {
-      "usuario": "felicitas.alcantar",
-      "nombre": "FELICITAS ALCANTAR MONTOYA",
+      "usuario": "Felicitas.Alcantar",
+      "nombre": "Felicitas Alcantar Montoya",
       "rol": "coordinador",
-      "password_sha256": "703498687c8c03bad1e372b1ee43020e461ce9b9f706b36ad79c35f1ef0c6eef",
+      "password_sha256": "f4d1d78e32a42ca500d0f7f6a25907695ee92f69a30b3f89537c2194559ca24e",
       "activo": true,
       "municipios": [
         3,
@@ -108,10 +87,10 @@
       ]
     },
     {
-      "usuario": "carlos.jimenez",
-      "nombre": "CARLOS FELIPE JIMÉNEZ MEXICANO",
+      "usuario": "Carlos.Jimenez",
+      "nombre": "Carlos Felipe Jiménez Mexicano",
       "rol": "coordinador",
-      "password_sha256": "c6bb8709d60502fd1210c4b4e23754e50bf01f97d77895663103979dc1ba9c98",
+      "password_sha256": "3901e89192ab2ff756228fa898ad68aab103b613325c792f3067ac036c80afff",
       "activo": true,
       "municipios": [
         5,
@@ -135,10 +114,10 @@
       ]
     },
     {
-      "usuario": "emmanuel.ochoa",
-      "nombre": "EMMANUEL ULISES OCHOA REYES",
+      "usuario": "Emmanuel.Ochoa",
+      "nombre": "Emmanuel Ulises Ochoa Reyes",
       "rol": "coordinador",
-      "password_sha256": "918a195f43fa43dc9e4bcd34546322f051f71556a7ecc9e33e97cfc2c4f3f504",
+      "password_sha256": "9ddb78987a9b26bf6563fc522252b07bf633962e82b161324e5cd2790b93f2a5",
       "activo": true,
       "municipios": [
         6,
@@ -169,10 +148,10 @@
       ]
     },
     {
-      "usuario": "juan.castillejos",
-      "nombre": "JUAN CARLOS CASTILLEJOS TOLEDO",
+      "usuario": "Juan.Castillejos",
+      "nombre": "Juan Carlos Castillejos Toledo",
       "rol": "coordinador",
-      "password_sha256": "6be439aeb9dc10e74f0d2574e23c8dd168e00b7387c5bc6941cad5f112364ace",
+      "password_sha256": "ddcbbcaeb8af77f2e0d417930864302096a27f5e2dd3781c4c1f934d67ecc745",
       "activo": true,
       "municipios": [
         41,
@@ -192,10 +171,10 @@
       ]
     },
     {
-      "usuario": "gimer.merida",
-      "nombre": "GIMER MÉRIDA LOZADA",
+      "usuario": "Gimer.Merida",
+      "nombre": "Gimer Mérida Lozada",
       "rol": "coordinador",
-      "password_sha256": "0ccff798f5cc7a73a23930be96e60c42f393d8f0b19a5697051a6c7ea4d61caa",
+      "password_sha256": "a49e3c5a3e63c5753cc869a8dd732547ab89665f86009b0fab172fb251a62086",
       "activo": true,
       "municipios": [
         8,
@@ -217,10 +196,10 @@
       ]
     },
     {
-      "usuario": "miguel.ochoa",
-      "nombre": "MIGUEL GIOVANNI OCHOA REYES",
+      "usuario": "Miguel.Ochoa",
+      "nombre": "Miguel Giovanni Ochoa Reyes",
       "rol": "coordinador",
-      "password_sha256": "918a195f43fa43dc9e4bcd34546322f051f71556a7ecc9e33e97cfc2c4f3f504",
+      "password_sha256": "ff7b2042a401f1109a3646a5d32be9b428ed17c2764203725f15ab27f0459419",
       "activo": true,
       "municipios": [
         9,
@@ -238,10 +217,10 @@
       ]
     },
     {
-      "usuario": "omar.moreno",
-      "nombre": "OMAR IVÁN MORENO MORALES",
+      "usuario": "Omar.Moreno",
+      "nombre": "Omar Iván Moreno Morales",
       "rol": "coordinador",
-      "password_sha256": "9dec58903b2974a140cc0db438e311b1805e07996278b04a48fdae0a61197576",
+      "password_sha256": "fba6792bde0a9124523254663b993617da74f147fd2d6418e7fe340162c0907a",
       "activo": true,
       "municipios": [
         14,
@@ -253,10 +232,10 @@
       ]
     },
     {
-      "usuario": "alejandro.cortazar",
-      "nombre": "ALEJANDRO JAVIER CORTAZAR LIRA",
+      "usuario": "Alejandro.Cortazar",
+      "nombre": "Alejandro Javier Cortazar Lira",
       "rol": "coordinador",
-      "password_sha256": "a7591bc99d04e6f9749ddc3dc5d2be6b037f68aad32ecf62f1abd221828eff76",
+      "password_sha256": "e3c947991008b789d32917a48877d3f456525ad96c53850562333a20826b4fd4",
       "activo": true,
       "municipios": [
         16,
@@ -271,10 +250,10 @@
       ]
     },
     {
-      "usuario": "luis.hernandez",
-      "nombre": "LUIS ENRIQUE HERNÁNDEZ ACEVEDO",
+      "usuario": "Luis.Hernandez",
+      "nombre": "Luis Enrique Hernández Acevedo",
       "rol": "coordinador",
-      "password_sha256": "b057f8ae0b96b825ed76c8c1a37e273cc9f10a4e66d826cf4270b95740996375",
+      "password_sha256": "4e66083e4041ee7f79dbdd9f42f09cc2ee0264253a75cae5fb20238f37242d62",
       "activo": true,
       "municipios": [
         7,
@@ -291,10 +270,10 @@
       ]
     },
     {
-      "usuario": "brian.rivera",
-      "nombre": "BRIAN OMAR RIVERA RAMÍREZ",
+      "usuario": "Brian.Rivera",
+      "nombre": "Brian Omar Rivera Ramírez",
       "rol": "coordinador",
-      "password_sha256": "7692ea6bff898f28c3b70a98cbc2ce876ffe58e303fb97c5215a28f989d22195",
+      "password_sha256": "65c15e6611720b314d3eec1606a8f8c635b340748b4a9717586976873df511cc",
       "activo": true,
       "municipios": [
         35,
@@ -317,10 +296,10 @@
       ]
     },
     {
-      "usuario": "julio.soni",
-      "nombre": "JULIO ENRIQUE SONI PAREDES",
+      "usuario": "Julio.Soni",
+      "nombre": "Julio Enrique Soni Paredes",
       "rol": "coordinador",
-      "password_sha256": "629f6fadc0113305f1376941c5220c3a884aad049622ac19707365c15196adb0",
+      "password_sha256": "ea4cd1716d66c361728dd66bd388716573d350aa1fca5a068fde915cba4c29e0",
       "activo": true,
       "municipios": [
         37,
@@ -341,10 +320,10 @@
       ]
     },
     {
-      "usuario": "carlos.mejia",
-      "nombre": "CARLOS ALBERTO MEJÍA COVARRUBIAS",
+      "usuario": "Carlos.Mejia",
+      "nombre": "Carlos Alberto Mejía Covarrubias",
       "rol": "coordinador",
-      "password_sha256": "77fb8f09c88eec86ccdde618cde0ed9ce2197e08910b1f67cad6d4f3832ae4c9",
+      "password_sha256": "563b02942e9ef1a00c3c9ce469905178037b40e3ceb2747630c84a6dac8cc9ad",
       "activo": true,
       "municipios": [
         45,
@@ -355,6 +334,48 @@
         178,
         200
       ]
+    },
+    {
+      "usuario": "Enrique.cambranis",
+      "nombre": "Enrique Cambranis",
+      "rol": "admin",
+      "password_sha256": "66b81ce64f7718d1f7cdf54c51cebb4b7746d283a644e081aaab50868ec12b1a",
+      "activo": true
+    },
+    {
+      "usuario": "Ana.ledezma",
+      "nombre": "Ana Ledezma",
+      "rol": "admin",
+      "password_sha256": "f5b8aa3e85db4c320cf985cd62c36bffa6496ae703734862a72c530f110ff303",
+      "activo": true
+    },
+    {
+      "usuario": "Gabriel.medardo",
+      "nombre": "Gabriel Medardo",
+      "rol": "admin",
+      "password_sha256": "5706ee07a6537ae1eb73f4cd3375b3adbc68f2c73b7a144585e1d47f5516bf86",
+      "activo": true
+    },
+    {
+      "usuario": "Karla.mogollan",
+      "nombre": "Karla Mogollan",
+      "rol": "admin",
+      "password_sha256": "3a86fa3baa65d834d15e0c622cf2728d66800ffeb6719d4382cfd4f4054d52e2",
+      "activo": true
+    },
+    {
+      "usuario": "Arturo.ruiz",
+      "nombre": "Arturo Ruiz",
+      "rol": "admin",
+      "password_sha256": "93f58649a17e8288a6c860c39437414e6350d1d6921fec13d25a0189c525bbe1",
+      "activo": true
+    },
+    {
+      "usuario": "Antony.rangel",
+      "nombre": "Antony Rangel",
+      "rol": "admin",
+      "password_sha256": "cc3e4bb912fe5884db0da5a9e3e1fbc5508fccb4eee89503e278c8762a89226f",
+      "activo": true
     }
   ]
 }

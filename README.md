@@ -21,12 +21,38 @@ válida (`sessionStorage`, 8 h). Roles:
 | `admin` | Todo: ver, exportar, gestionar usuarios |
 | `capturista` | Ver municipios y exportar |
 | `consulta` | Solo lectura (botón exportar oculto) |
-| `coordinador` | Solo SUS municipios + botón Filtros convertido en **Exportar Excel** (abre el mismo menú: descargar, compartir .xlsx, compartir .csv por WhatsApp) |
+| `coordinador` | Solo SUS municipios + botón Filtros convertido en **Exportar Excel** (abre el mismo menú: descargar, compartir .xlsx, compartir .csv por WhatsApp). Solo ve la **barra de búsqueda general** (acotada a sus municipios); el buscador "Municipios o personas" se oculta |
 
 Coordinadores de zona (14): user `primer_nombre.primer_apellido`,
 password `primer_apellido.segundo_apellido` (minúsculas, sin acentos).
 Cada uno solo ve los municipios de su `coordinador_zona`.
 Regenerar tras cambios en el Panel: `node tools/gen-coordinadores.js`.
+
+**Municipios compartidos:** un coordinador puede tener además
+`municipios_adicionales` en `data/usuarios.json` — municipios de la zona de
+otro coordinador a los que también tiene acceso. El alcance real es
+`municipios` + `municipios_adicionales` (se combinan al iniciar sesión), pero
+**NO se modifica la zona**: en la ficha del municipio sigue figurando el
+coordinador de zona original, y ambos coordinadores ven esos municipios.
+Ejemplo: `carlos.mejia` ve sus 7 municipios + los 5 de la zona 10
+(Alpatlahuac, Calgahualco, Chocamán, Coscomatepec, Tomatlán), que siguen
+siendo zona de Miguel Ochoa. `tools/gen-coordinadores.js` preserva este campo
+al regenerar.
+
+**Buscadores del coordinador:** en el panel hay dos barras de búsqueda —
+*general* (revisa todos los campos) y *Municipios o personas*. El coordinador
+solo ve la **general**, ya acotada a sus municipios (`fortaScope` filtra los
+212 municipios al cargar); la de nombres se oculta y deja de filtrar
+(`fortaSoloBusquedaGeneral`). Los demás roles (admin, capturista, consulta)
+siguen viendo las dos.
+
+Prueba en vivo de este comportamiento (Chrome con depuración remota):
+
+```bat
+node tools/serve.js 8099                                  :: servidor local
+start chrome --headless=new --remote-debugging-port=9222 --user-data-dir=%TEMP%\forta-cdp
+node tools/check-coord-busqueda.js                        :: login real + comprobaciones
+```
 
 Usuarios iniciales: `admin` / `admin123` y `consulta` / `consulta123`
 (cambiar tras el primer acceso). Nueva contraseña:
@@ -35,7 +61,8 @@ Usuarios iniciales: `admin` / `admin123` y `consulta` / `consulta123`
 node tools/hash-password.js "MiClave123"   :: imprime el SHA-256 para pegar en data/usuarios.json
 ```
 
-## Archivos
+**Creados / actualizados con las mismas normas: nombre en mayúsculas y
+contraseña palabra.palabra.NNNNNNNN (dos palabras + dos números aleatorios)**.\n\n| Usuario | Rol | Nombre en mayúsculas | Password (formato: palabra.palabra.NNNNNNNN) |\n|---|---|---|---|\n| dmin | admin | Administrador | casa.rompecabezas.4271 |\n| gabo | admin | Gabo | sol.luna.8316 |\n| Enrique.cambranis | admin | Enrique Cambranis | mar.rio.2954 |\n| Ana.ledezma | admin | Ana Ledezma | ida.flor.1763 |\n| Gabriel.medardo | admin | Gabriel Medardo | piedra.hielo.4092 |\n| Karla.mogollan | admin | Karla Mogollan | iento.luna.8721 |\n| Arturo.ruiz | admin | Arturo Ruiz | casa.sol.1122 |\n| Antony.rangel | admin | Antony Rangel | luna.mar.3344 |\n\n> ⚠️ Estas son las **primera contraseñas** que se les asigna. El usuario\n> deberá cambiarlas al primer acceso (o se entrega por persona).\n\n## Archivos
 
 | Archivo | Para qué sirve |
 |---|---|
@@ -57,6 +84,7 @@ node tools/hash-password.js "MiClave123"   :: imprime el SHA-256 para pegar en d
 | `build-votos.js` | **Votos por partido desde el SEE.** Lee los 3 listados del SEE (`2025_SEE_AYUN_VER_MUN`, `2024_SEE_DIP_LOC_MR_VER_MUN`, `2024_SEE_DIP_FED_MR_NAL_MUN`), calcula por municipio y votación una barra por partido con su `%` sobre el total de votos **a partidos** (sin coaliciones, ni candidatos independientes, ni nulos) y guarda el campo `votos_partidos` en `data/municipios.json` y `data/votos.json`. Ver sección *Votos por partido*. |
 | `verify.js` | Verificación de integridad (5 secciones; comprueba que `index.html` NO lleve datos embebidos). |
 | `smoke-ui.js` | Prueba de renderizado: ejecuta `dashboard.js` con un DOM simulado + `data/municipios.json`. |
+| `tools/check-coord-busqueda.js` | Prueba en vivo (Chrome CDP): login real, que el coordinador solo vea la barra de búsqueda general, que la búsqueda no se salga de su zona, que los municipios compartidos (`municipios_adicionales`) se vean y que los demás roles sigan viendo las dos barras. |
 | `inspect-xlsx.js` | **Radiografía de un Excel nuevo**: hojas que trae, columna por columna (título real, campo del JSON, filas con dato, formato, valor descartado) y diferencias contra `data/municipios.json`. Útil cada vez que llega una versión nueva del panel. |
 
 ## Comandos
