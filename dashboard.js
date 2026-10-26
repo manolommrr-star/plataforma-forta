@@ -1481,7 +1481,22 @@ function downloadBlob(blob, filename) {
             if (e.key === 'Escape' && sidebar.classList.contains('open')) closeDrawer();
         });
     }
-    try { loadData(); } catch(e) { console.error('loadData error:', e); }
-    try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
+    // Esperar a que Firebase esté inicializado, luego cargar datos
+    if (window.initFirebasePromise) {
+        window.initFirebasePromise.then(function() {
+            if (window.firebaseFirestore) {
+                loadData().catch(function(e) { console.error('loadData error:', e); });
+            } else {
+                console.error('❌ Firebase Firestore no disponible. Verifica firebase-config.js');
+                setSubtitle('ERROR: Firebase no configurado.');
+            }
+        }).catch(function(e) {
+            console.error('❌ Error al inicializar Firebase:', e);
+            setSubtitle('ERROR: Firebase no configurado.');
+        });
+    } else {
+        try { loadData(); } catch(e) { console.error('loadData error:', e); }
+    }
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 })();
 

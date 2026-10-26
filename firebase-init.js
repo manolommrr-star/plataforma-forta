@@ -38,12 +38,8 @@ async function initFirebase() {
     }
 }
 
-// Inicializar cuando el DOM esté listo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initFirebase);
-} else {
-    initFirebase();
-}
-
-// Exportar para uso en otros scripts (siempre es una promesa)
+// Inicializar Firebase inmediatamente (no depende del DOM)
 window.initFirebasePromise = initFirebase();
+
+// También exponer función por si se necesita re-inicializar
+window.mainInit = initFirebase;

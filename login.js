@@ -1,8 +1,9 @@
-/* ==========================================================================
-   login.js — Pantalla de acceso del Panel de Fortalecimiento Interno.
-   Valida contra data/usuarios.json (SHA-256) y guarda la sesión en
-   sessionStorage (clave forta_session). Sin sesión no se entra al panel.
+/* ============================================================================
+   login.js — Pantalla de acceso del Panel de Fortalecimiento Interno
+   Valida contra Firestore (colección "usuarios") usando SHA-256.
+   Sin sesión no se entra al panel.
    ========================================================================== */
+
 'use strict';
 
 const SESSION_KEY = 'forta_session';
@@ -19,107 +20,15 @@ function showError(msg) {
     el.hidden = false;
 }
 
-// Alcance de municipios de un usuario:
-//   - `municipios`            -> municipios de su zona (coordinador)
-async function fetchUsuariosDesdeFirestore() {
-    try {
-        const usuarios = [];
-        const snapshot = await window.firebaseFirestore.collection('usuarios').get();
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            usuarios.push({
-                usuario: data.usuario || data.username,
-                password_sha256: data.password_sha256 || data.password,
-                rol: data.rol || 'consulta',
-                nombre: data.nombre || data.name,
-                activo: data.activo !== false,
-                municipios: data.municipios || [],
-                municipios_adicionales: data.municipios_adicionales || []
-            });
-        });
-        return usuarios;
-    } catch (error) {
-        console.error('Error al obtener usuarios:', error);
-        throw error;
-    }
-}
-//   - `municipios_adicionales`-> municipios compartidos con el (acceso extra)
-// Ambos se combinan en una sola lista; null = sin restriccion (admin/consulta).
-// Compartir acceso NO cambia la zona del municipio en data/municipios.json.
-function alcanceMunicipios(user) {
-    const zona = Array.isArray(user && user.municipios) ? user.municipios : null;
-    const extra = Array.isArray(user && user.municipios_adicionales) ? user.municipios_adicionales : [];
-    if (!zona && !extra.length) return null;
-    const set = {};
-    (zona || []).forEach(n => { set[n] = true; });
-    extra.forEach(n => { set[n] = true; });
-    return Object.keys(set).map(Number).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
-}
-
 function setLoading(on) {
     const btn = document.getElementById('login-submit');
     btn.disabled = on;
     btn.querySelector('span').textContent = on ? 'Verificando...' : 'Entrar';
 }
 
-async function handleLogin(ev) {
-    ev.preventDefault();
-    document.getElementById('login-error').hidden = true;
-    const usuario = document.getElementById('login-user').value.trim().toLowerCase();
-    const password = document.getElementById('login-pass').value;
-    if (!usuario || !password) { showError('Escribe tu usuario y contraseña.'); return; }
-    setLoading(true);
-    try {
-        // 1. Buscar usuario en Firestore
-        const usuarios = await fetchUsuariosDesdeFirestore();
-        const found = usuarios.find(u => String(u.usuario).toLowerCase() === usuario);
-        if (!found || found.activo === false) { showError('Usuario no encontrado o inactivo.'); return; }
-        const hash = await sha256(password);
-        if (hash !== found.password_sha256) { showError('Contraseña incorrecta.'); return; }
-        // Alcance: municipios de su zona + municipios adicionales compartidos
-        // (acceso compartido con otro coordinador; NO cambia la zona del municipio).
-        const alcance = alcanceMunicipios(found);
-        const session = {
-            usuario: found.usuario,
-            nombre: found.nombre || found.usuario,
-            rol: found.rol || 'consulta',
-            municipios: alcance,
-            loginAt: Date.now()
-        };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        location.href = 'index.html';
-    } catch (err) {
-        console.error('Login:', err);
-        showError('No se pudo validar el acceso. Sirve la carpeta por http (npx serve .) — file:// bloquea fetch.');
-    } finally {
-        setLoading(false);
-    }
-}
-
-function getSession() {
-    try {
-        const s = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-/* ============================================================================
-   login.js — Pantalla de acceso del Panel de Fortalecimiento Interno
-   Valida contra Firestore (colección "usuarios") usando SHA-256.
-   Sin sesión no se entra al panel.
-   ========================================================================== */
-
-'use strict';
-
-const SESSION_KEY = 'forta_session';
-const SESSION_MAX_MIN = 8 * 60; // 8 horas
-
 /**
  * Obtiene usuarios desde Firestore y los normaliza.
- * Busca en colección "usuarios" y devuelve array de objetos con:
- * - usuario (o username)
- * - password_sha256 (o password)
- * - rol
- * - nombre
- * - activo
- * - municipios
- * - municipios_adicionales
+ * Busca en colección "usuarios" y devuelve array.
  */
 async function fetchUsuariosDesdeFirestore() {
     try {
@@ -128,10 +37,10 @@ async function fetchUsuariosDesdeFirestore() {
         snapshot.forEach(doc => {
             const data = doc.data();
             usuarios.push({
-                usuario: data.usuario || data.username,
-                password_sha256: data.password_sha256 || data.password,
+                usuario: data.usuario,
+                password_sha256: data.password_sha256,
                 rol: data.rol || 'consulta',
-                nombre: data.nombre || data.name,
+                nombre: data.nombre || data.usuario,
                 activo: data.activo !== false,
                 municipios: data.municipios || [],
                 municipios_adicionales: data.municipios_adicionales || []
@@ -144,16 +53,17 @@ async function fetchUsuariosDesdeFirestore() {
     }
 }
 
-function showError(msg) {
-    const el = document.getElementById('login-error');
-    el.textContent = msg;
-    el.hidden = false;
-}
-
-function setLoading(on) {
-    const btn = document.getElementById('login-submit');
-    btn.disabled = on;
-    btn.querySelector('span').textContent = on ? 'Verificando...' : 'Entrar';
+// Alcance de municipios de un usuario:
+//   - `municipios`            -> municipios de su zona (coordinador)
+//   - `municipios_adicionales`-> municipios compartidos con el (acceso extra)
+function alcanceMunicipios(user) {
+    const zona = Array.isArray(user && user.municipios) ? user.municipios : null;
+    const extra = Array.isArray(user && user.municipios_adicionales) ? user.municipios_adicionales : [];
+    if (!zona && !extra.length) return null;
+    const set = {};
+    (zona || []).forEach(n => { set[n] = true; });
+    extra.forEach(n => { set[n] = true; });
+    return Object.keys(set).map(Number).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
 }
 
 async function handleLogin(ev) {
@@ -161,15 +71,22 @@ async function handleLogin(ev) {
     document.getElementById('login-error').hidden = true;
     const usuario = document.getElementById('login-user').value.trim().toLowerCase();
     const password = document.getElementById('login-pass').value;
-    if (!usuario || !password) { showError('Escribe tu usuario y contraseña.'); return; }
+    if (!usuario || !password) { showError('Escribe tu usuario y contrase\u00f1a.'); return; }
     setLoading(true);
     try {
+        // Verificar que Firebase esté inicializado
+        if (!window.firebaseFirestore) {
+            showError('Firebase no configurado. Recarga la p\u00e1gina.');
+            setLoading(false);
+            return;
+        }
+
         // 1. Buscar usuario en Firestore
         const usuarios = await fetchUsuariosDesdeFirestore();
         const found = usuarios.find(u => String(u.usuario).toLowerCase() === usuario);
         if (!found || found.activo === false) { showError('Usuario no encontrado o inactivo.'); return; }
         const hash = await sha256(password);
-        if (hash !== found.password_sha256) { showError('Contraseña incorrecta.'); return; }
+        if (hash !== found.password_sha256) { showError('Contrase\u00f1a incorrecta.'); return; }
         // Alcance: municipios de su zona + municipios adicionales compartidos
         const alcance = alcanceMunicipios(found);
         const session = {
@@ -183,7 +100,7 @@ async function handleLogin(ev) {
         location.href = 'index.html';
     } catch (err) {
         console.error('Login:', err);
-        showError('No se pudo validar el acceso. Asegúrate de que Firebase esté configurado correctamente.');
+        showError('No se pudo validar el acceso. Aseg\u00farate de que Firebase est\u00e9 configurado correctamente.');
         setLoading(false);
     }
 }
@@ -191,42 +108,6 @@ async function handleLogin(ev) {
 function getSession() {
     try {
         const s = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-        if (!s || !s.usuario) return null;
-        if (Date.now() - s.loginAt > SESSION_MAX_MIN * 60 * 1000) {
-            sessionStorage.removeItem(SESSION_KEY);
-            return null;
-        }
-        return s;
-    } catch { return null; }
-}
-
-function logout(dest) {
-    sessionStorage.removeItem(SESSION_KEY);
-    location.href = dest || 'login.html';
-}
-
-function alcanceMunicipios(user) {
-    const zona = Array.isArray(user && user.municipios) ? user.municipios : null;
-    const extra = Array.isArray(user && user.municipios_adicionales) ? user.municipios_adicionales : [];
-    if (!zona && !extra.length) return null;
-    const set = {};
-    (zona || []).forEach(n => { set[n] = true; });
-    extra.forEach(n => { set[n] = true; });
-    return Object.keys(set).map(Number).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
-}
-
-(function initLogin() {
-    if (getSession()) { location.href = 'index.html'; return; }
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('login-toggle').addEventListener('click', function() {
-        const input = document.getElementById('login-pass');
-        const show = input.type === 'password';
-        input.type = show ? 'text' : 'password';
-        this.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
-    });
-    try { if (window.lucide) lucide.createIcons(); } catch (e) {}
-})();
-
         if (!s || !s.usuario) return null;
         if (Date.now() - s.loginAt > SESSION_MAX_MIN * 60 * 1000) {
             sessionStorage.removeItem(SESSION_KEY);
@@ -249,7 +130,7 @@ function logout(dest) {
         const input = document.getElementById('login-pass');
         const show = input.type === 'password';
         input.type = show ? 'text' : 'password';
-        this.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        this.setAttribute('aria-label', show ? 'Ocultar contrase\u00f1a' : 'Mostrar contrase\u00f1a');
     });
     try { if (window.lucide) lucide.createIcons(); } catch (e) {}
 })();
