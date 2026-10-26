@@ -1,27 +1,3 @@
-﻿# Excels fuente (contienen datos sensibles: telefonos). No se suben.
-# Los datos ya van generados en data/municipios.json
-*.xlsx
-~$*.xlsx
-*.xls
-
-# CSV derivado de localidades (se regenera con build-localidades.js)
-localidades-por-municipio.csv
-
-# Temporales de Office / sistema
-~$*
-Thumbs.db
-.DS_Store
-
-# Logs y temporales de node
-*.log
-node_modules/
-
-# Salidas de las auditorias de UI (tools/*.txt) y capturas PNG de herramientas
-tools/_*.txt
-tools/*.png
-
-# Credenciales reales de los coordinadores (NO se suben)
-tools/_coord-pw.json
-
-# Perfil de Chrome para depuracion remota (CDP)
-.chrome-cdp/
+﻿# Configuración Firebase (contiene credenciales - NO subir)
+firebase-config.js
+firebase-rules.rules

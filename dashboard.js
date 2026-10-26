@@ -90,27 +90,46 @@ function municipioEnCoordinadoresSeleccionados(m, seleccionados) {
 async function loadData() {
     setSubtitle('Cargando municipios...');
     try {
-        var resMunis = await fetch('data/municipios.json', { cache: 'no-store' });
-        if (!resMunis.ok) throw new Error('HTTP ' + resMunis.status + ' al cargar data/municipios.json');
-        var munisData = await resMunis.json();
-
-        // usuarios.json solo aporta el alcance de los coordinadores (municipios
-        // compartidos). Si falla, se sigue con los municipios: el filtro por
-        // coordinador funciona por zona, pero los municipios compartidos no
-        // se incluyen.
-        var usersData = { usuarios: [] };
+        // Cargar municipios desde Firestore
+        var munisData = [];
         try {
-            var resUsers = await fetch('data/usuarios.json', { cache: 'no-store' });
-            if (!resUsers.ok) throw new Error('HTTP ' + resUsers.status);
-            usersData = await resUsers.json();
-        } catch (uerr) {
-            console.warn('No se pudo cargar data/usuarios.json (municipios compartidos no disponibles):', uerr);
+            var munisSnapshot = await window.firebaseFirestore.collection('municipios').get();
+            munisSnapshot.forEach(doc => {
+                munisData.push(doc.data());
+            });
+        } catch (err) {
+            console.error('Error al cargar municipios desde Firestore:', err);
+            setSubtitle('ERROR al cargar datos. Verifica Firebase config.');
+            return;
         }
-        buildCoordinatorScopeMap(usersData);
-        initData(munisData);
+        allData = munisData;
+
+        // Inicializar secciones extensibles
+        allData.forEach(m => {
+            if (!m.metricas) m.metricas = {};
+            if (!m.etiquetas) m.etiquetas = [];
+            if (!m.metadata) m.metadata = {};
+        });
+
+        setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
+        initFilters();
+        applyFilters();
+
+        // Cargar datos de usuarios para coordinadores
+        try {
+            var usersData = { usuarios: [] };
+            var usersSnapshot = await window.firebaseFirestore.collection('usuarios').get();
+            usersSnapshot.forEach(doc => {
+                usersData.usuarios.push(doc.data());
+            });
+            buildCoordinatorScopeMap(usersData);
+        } catch (uerr) {
+            console.warn('No se pudo cargar usuarios (municipios compartidos no disponibles):', uerr);
+        }
+
     } catch(err) {
         console.error('Error cargando datos:', err);
-        setSubtitle('ERROR cargando data/municipios.json. Sirve la carpeta por http (ej. npx serve .) — file:// bloquea fetch por CORS.');
+        setSubtitle('ERROR al conectar con Firebase. Verifica la configuración.');
     }
 }
 

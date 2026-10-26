@@ -209,9 +209,11 @@
         </div>
     </div>
 
-    <!-- Datos: se cargan solo desde data/municipios.json via fetch (dashboard.js).
-         Requiere servidor http local (npx serve .) o GitHub Pages; file:// bloquea fetch por CORS.
+    <!-- Datos: se cargan desde Firestore (colección "municipios").
+         Requiere Firebase configurado en firebase-config.js.
          auth.js (sin defer) exige sesión válida antes de mostrar el panel. -->
+    <script src="firebase-config.js"></script>
+    <script src="firebase-init.js"></script>
     <script src="auth.js"></script>
     <script src="dashboard.js" defer></script>
     <script>
