@@ -26,8 +26,8 @@ async function initFirebase() {
         firebase.initializeApp(config);
         
         // Exportar servicios
+        // Nota: NO usamos Firebase Authentication (login sin email)
         window.firebaseApp = firebase.app();
-        window.firebaseAuth = firebase.auth();
         window.firebaseFirestore = firebase.firestore();
         
         console.log('✅ Firebase inicializado correctamente');
