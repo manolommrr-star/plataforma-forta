@@ -1,45 +1,35 @@
 /**
- * firebase-init.js — Inicialización de Firebase
- * 
- * Inicializa Firebase y exporta las referencias a los servicios.
- * Debe cargarse ANTES que otros scripts que usen Firebase.
+ * firebase-init.js — Inicialización de Firebase con tolerancia a bloqueos
+ * Inicializa Firebase si está disponible; si está bloqueado por el navegador/red,
+ * permite que el sistema continúe con el almacenamiento local.
  */
 'use strict';
 
-// Esperar a que firebase-config.js esté disponible
 async function initFirebase() {
-    if (typeof window.FORTA_FIREBASE_CONFIG === 'undefined') {
-        console.error('⚠️ FORTA_FIREBASE_CONFIG no está definido. Asegúrate de que firebase-config.js esté cargado primero.');
+    if (typeof window === 'undefined' || typeof window.FORTA_FIREBASE_CONFIG === 'undefined') {
         return false;
     }
-    
+
     const config = window.FORTA_FIREBASE_CONFIG;
-    
-    // Verificar que Firebase SDK esté disponible
+
     if (typeof firebase === 'undefined') {
-        console.error('⚠️ SDK de Firebase no cargado. Agregar <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>');
+        console.warn('⚠️ SDK de Firebase no disponible o bloqueado por el navegador/red. Se usará el almacenamiento local de respaldo.');
         return false;
     }
-    
+
     try {
-        // Inicializar Firebase
-        firebase.initializeApp(config);
-        
-        // Exportar servicios
-        // Nota: NO usamos Firebase Authentication (login sin email)
+        if (!firebase.apps || !firebase.apps.length) {
+            firebase.initializeApp(config);
+        }
         window.firebaseApp = firebase.app();
         window.firebaseFirestore = firebase.firestore();
-        
-        console.log('✅ Firebase inicializado correctamente');
+        console.log('✅ Firebase Firestore inicializado');
         return true;
     } catch (error) {
-        console.error('❌ Error al inicializar Firebase:', error);
+        console.warn('⚠️ No se pudo inicializar Firebase (' + error.message + '). Se usará el almacenamiento local.');
         return false;
     }
 }
 
-// Inicializar Firebase inmediatamente (no depende del DOM)
 window.initFirebasePromise = initFirebase();
-
-// También exponer función por si se necesita re-inicializar
 window.mainInit = initFirebase;

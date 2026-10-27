@@ -89,47 +89,114 @@ function municipioEnCoordinadoresSeleccionados(m, seleccionados) {
 
 async function loadData() {
     setSubtitle('Cargando municipios...');
-    try {
-        // Cargar municipios desde Firestore
-        var munisData = [];
+    var munisData = [];
+    var origen = 'Firestore';
+
+    // 1. Intentar cargar desde Firestore con timeout si está disponible
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
         try {
-            var munisSnapshot = await window.firebaseFirestore.collection('municipios').get();
-            munisSnapshot.forEach(doc => {
-                munisData.push(doc.data());
+            var firestorePromise = (async function() {
+                var munisSnapshot = await window.firebaseFirestore.collection('municipios').get();
+                var list = [];
+                munisSnapshot.forEach(function(doc) {
+                    var d = doc.data();
+                    if (!d['numero de municipio']) d['numero de municipio'] = Number(doc.id);
+                    list.push(d);
+                });
+                return list;
+            })();
+
+            var timeoutPromise = new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('TIMEOUT_FIRESTORE')); }, 2500);
             });
+
+            munisData = await Promise.race([firestorePromise, timeoutPromise]);
+            console.log('✅ Municipios cargados desde Firestore (' + munisData.length + ')');
         } catch (err) {
-            console.error('Error al cargar municipios desde Firestore:', err);
-            setSubtitle('ERROR al cargar datos. Verifica Firebase config.');
+            console.warn('⚠️ No se pudo obtener municipios de Firestore (' + (err.message || err) + '). Activando respaldo local...');
+            munisData = [];
+        }
+    }
+
+    // 2. Fallback automático a data/municipios.json
+    if (!munisData || !munisData.length) {
+        origen = 'municipios.json (local)';
+        try {
+            var res = await fetch('data/municipios.json', { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            munisData = await res.json();
+            console.log('🔄 Municipios cargados desde respaldo local (' + munisData.length + ')');
+        } catch (err) {
+            console.error('Error cargando municipios desde respaldo local:', err);
+            setSubtitle('ERROR al cargar municipios.');
             return;
         }
-        allData = munisData;
+    }
 
-        // Inicializar secciones extensibles
-        allData.forEach(m => {
-            if (!m.metricas) m.metricas = {};
-            if (!m.etiquetas) m.etiquetas = [];
-            if (!m.metadata) m.metadata = {};
-        });
+    // Normalizar numero de municipio como número en todos los registros
+    munisData.forEach(function(m, idx) {
+        var num = m['numero de municipio'];
+        if (num !== undefined && num !== null && num !== '') {
+            var n = Number(num);
+            if (!isNaN(n)) m['numero de municipio'] = n;
+        } else if (m.id && !isNaN(Number(m.id))) {
+            m['numero de municipio'] = Number(m.id);
+        } else {
+            m['numero de municipio'] = idx + 1;
+        }
+    });
 
-        setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
-        initFilters();
-        applyFilters();
+    if (Array.isArray(fortaScope) && fortaScope.length) {
+        var permitidos = {};
+        fortaScope.forEach(function(n) { permitidos[n] = true; permitidos[String(n)] = true; });
+        munisData = munisData.filter(function(m) { return permitidos[m['numero de municipio']]; });
+    }
 
-        // Cargar datos de usuarios para coordinadores
+    allData = munisData;
+
+    // Inicializar secciones extensibles
+    allData.forEach(function(m) {
+        if (!m.metricas) m.metricas = {};
+        if (!m.etiquetas) m.etiquetas = [];
+        if (!m.metadata) m.metadata = {};
+    });
+
+    setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
+    var badge = document.querySelector('.data-source-badge');
+    if (badge) {
+        badge.innerHTML = '<i data-lucide="database"></i> ' + origen;
+        try { if (window.lucide) lucide.createIcons(); } catch (e) {}
+    }
+
+    initFilters();
+    applyFilters();
+
+    // 3. Cargar datos de usuarios para coordinadores (zona + compartidos)
+    var usersData = { usuarios: [] };
+    if (typeof window !== 'undefined' && window.firebaseFirestore && origen.indexOf('Firestore') !== -1) {
         try {
-            var usersData = { usuarios: [] };
             var usersSnapshot = await window.firebaseFirestore.collection('usuarios').get();
-            usersSnapshot.forEach(doc => {
-                usersData.usuarios.push(doc.data());
+            usersSnapshot.forEach(function(doc) {
+                var ud = doc.data();
+                if (!ud.usuario) ud.usuario = doc.id;
+                usersData.usuarios.push(ud);
             });
             buildCoordinatorScopeMap(usersData);
         } catch (uerr) {
-            console.warn('No se pudo cargar usuarios (municipios compartidos no disponibles):', uerr);
+            console.warn('Fallback a usuarios.json para coordinadores...');
         }
+    }
 
-    } catch(err) {
-        console.error('Error cargando datos:', err);
-        setSubtitle('ERROR al conectar con Firebase. Verifica la configuración.');
+    if (!usersData.usuarios || !usersData.usuarios.length) {
+        try {
+            var ures = await fetch('data/usuarios.json', { cache: 'no-store' });
+            if (ures.ok) {
+                usersData = await ures.json();
+                buildCoordinatorScopeMap(usersData);
+            }
+        } catch (e) {
+            console.warn('No se pudo cargar data/usuarios.json:', e);
+        }
     }
 }
 
@@ -602,7 +669,7 @@ function renderList() {
                     '<span class="muni-card__badge ' + estatusClass(est) + '" title="' + escapeHtml(est || 'Sin estatus de estructura') + '">' + escapeHtml(estatusShort(est)) + '</span>' +
                 '</div>' +
                 '<div class="muni-card__districts">DL: <em>' + escapeHtml(m.distrito_local || '\u2014') + '</em> &nbsp;·&nbsp; DF: <em>' + escapeHtml(m.distrito_federal || '\u2014') + '</em></div>';
-            card.addEventListener('click', function() { openDetail(m['numero de municipio']); });
+            card.addEventListener('click', function() { openDetail(m['numero de municipio'], m); });
             listEl.appendChild(card);
         });
 
@@ -730,8 +797,13 @@ function closeCallSheet() {
     if (ov) ov.classList.remove('open');
 }
 
-function openDetail(id) {
-    var m = allData.find(function(x) { return x['numero de municipio'] === id; });
+function openDetail(id, municipioObj) {
+    var m = municipioObj || allData.find(function(x) {
+        return x['numero de municipio'] === id ||
+               String(x['numero de municipio']) === String(id) ||
+               (Number(x['numero de municipio']) === Number(id) && !isNaN(Number(id))) ||
+               (x.municipio && id && String(x.municipio).toLowerCase().trim() === String(id).toLowerCase().trim());
+    });
     if (!m) return;
     var content = document.getElementById('detail-content');
     var est = (m.estatus_estructura || '').trim();
@@ -919,6 +991,7 @@ function openDetail(id) {
     content.innerHTML = html;
     document.getElementById('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
     // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
     var vp = m.votos_partidos || {};
@@ -1481,21 +1554,15 @@ function downloadBlob(blob, filename) {
             if (e.key === 'Escape' && sidebar.classList.contains('open')) closeDrawer();
         });
     }
-    // Esperar a que Firebase esté inicializado, luego cargar datos
+    // Cargar datos (Firestore con fallback automático a local)
     if (window.initFirebasePromise) {
         window.initFirebasePromise.then(function() {
-            if (window.firebaseFirestore) {
-                loadData().catch(function(e) { console.error('loadData error:', e); });
-            } else {
-                console.error('❌ Firebase Firestore no disponible. Verifica firebase-config.js');
-                setSubtitle('ERROR: Firebase no configurado.');
-            }
-        }).catch(function(e) {
-            console.error('❌ Error al inicializar Firebase:', e);
-            setSubtitle('ERROR: Firebase no configurado.');
+            loadData().catch(function(e) { console.error('loadData error:', e); });
+        }).catch(function() {
+            loadData().catch(function(e) { console.error('loadData error:', e); });
         });
     } else {
-        try { loadData(); } catch(e) { console.error('loadData error:', e); }
+        loadData().catch(function(e) { console.error('loadData error:', e); });
     }
     try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 })();
