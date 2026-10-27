@@ -291,8 +291,7 @@ function populateMultiSelect(containerId, options, filterKey, optionLabels) {
     options.forEach(function(opt) {
         var div = document.createElement('div');
         div.className = 'multi-select__option';
-        div.innerHTML = '<input type="checkbox" value="' + escapeHtml(opt) + '" data-filter="' + filterKey + '">' +
-            '<span>' + escapeHtml(labels[opt] || opt) + '</span>';
+        div.innerHTML = '<label class="opt-row"><input type="checkbox" value="' + escapeHtml(opt) + '" data-filter="' + filterKey + '"><span class="opt-label">' + escapeHtml(labels[opt] || opt) + '</span></label>';
         div.querySelector('input').addEventListener('change', onFilterChange);
         optionsList.appendChild(div);
     });
@@ -820,7 +819,7 @@ function openDetail(id, municipioObj) {
     html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
     html += '<div class="detail-title-row">';
     html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
-    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin" style="width:14px;height:14px;"></i></button>';
+    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin" style="width:16px;height:16px;"></i></button>';
     html += '</div>';
     html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
     html += '</div>';
