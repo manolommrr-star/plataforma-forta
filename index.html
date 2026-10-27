@@ -214,7 +214,7 @@
     <!-- Datos: se cargan desde Firestore (colección "municipios").
          Requiere Firebase configurado en firebase-config.js.
          auth.js (sin defer) exige sesión válida antes de mostrar el panel. -->
-    <script src="firebase-config.js"></script>
+    <!-- <script src="firebase-config.js"></script>  quitado: no se publica en GitHub Pages (evita 404). Firebase opcional; si falta, dashboard.js usa respaldo local -->
     <script src="firebase-init.js"></script>
     <script src="auth.js"></script>
     <script src="dashboard.js" defer></script>
