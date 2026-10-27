@@ -152,8 +152,10 @@ async function loadData() {
         munisData = munisData.filter(function(m) { return permitidos[m['numero de municipio']]; });
     }
 
-    allData = munisData;
-
+    allData = munisData;
+
+
+
     // Inicializar secciones extensibles
     allData.forEach(function(m) {
         if (!m.metricas) m.metricas = {};
@@ -818,7 +820,7 @@ function openDetail(id, municipioObj) {
     html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
     html += '<div class="detail-title-row">';
     html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
-    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin"></i></button>';
+    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin" style="width:14px;height:14px;"></i></button>';
     html += '</div>';
     html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
     html += '</div>';
