@@ -735,7 +735,7 @@ function detailLocalidades(detalle, enHero) {
     });
     var out = '<div class="' + (enHero ? 'loc-hero loc-details' : 'detail-item full loc-details') + '">';
     out += '<details>';
-    out += '<summary class="loc-toggle"><i data-lucide="map-pin"></i><span class="loc-toggle__t">Localidades</span> <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<summary class="loc-toggle"><svg class="map-pin-svg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg><span class="loc-toggle__t">Localidades</span> <span class="loc-count">' + nombres.length + '</span></summary>';
     out += '<div class="loc-list">';
     nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(n) + '</div>'; });
     out += '</div></details></div>';
@@ -818,7 +818,7 @@ function openDetail(id, municipioObj) {
     html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
     html += '<div class="detail-title-row">';
     html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
-    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><svg class="map-pin-svg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg></button>';
+    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin"></i></button>';
     html += '</div>';
     html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
     html += '</div>';
