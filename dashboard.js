@@ -1556,6 +1556,16 @@ function downloadBlob(blob, filename) {
         });
     }
     // Cargar datos (Firestore con fallback automático a local)
+    // Obtener sesión y configurar fortaScope ANTES de cargar datos
+    // para que el filtrado por municipios del coordinador funcione
+    var fortaSessionInit = null;
+    try {
+        fortaSessionInit = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+        if (fortaSessionInit) {
+            fortaScope = Array.isArray(fortaSessionInit.municipios) ? fortaSessionInit.municipios : null;
+        }
+    } catch (e) { console.error('session init:', e); }
+
     if (window.initFirebasePromise) {
         window.initFirebasePromise.then(function() {
             loadData().catch(function(e) { console.error('loadData error:', e); });
