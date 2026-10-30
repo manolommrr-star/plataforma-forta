@@ -31,12 +31,12 @@ function fortaLogout() {
 }
 
 function fortaIsCoordinador(session) {
-    return !!session && session.rol === 'coordinador';
+    return !!session && (session.rol === 'coordinador' || session.rol === 'coordinador_g20');
 }
 
 function fortaCanExport(rol) {
     // consulta = solo lectura; todos los demas exportan
-    return rol === 'admin' || rol === 'capturista' || rol === 'coordinador';
+    return rol === 'admin' || rol === 'capturista' || rol === 'coordinador' || rol === 'coordinador_g20';
 }
 
 function fortaCanManageUsers(rol) {

@@ -59,7 +59,7 @@ function buildCoordinatorScopeMap(data) {
     coordinatorScopeMap = {};
     coordinatorNames = [];
     ((data && data.usuarios) || []).forEach(function(u) {
-        if (u.rol !== 'coordinador') return;
+        if (u.rol !== 'coordinador' && u.rol !== 'coordinador_g20') return;
         var name = nameCase(u.nombre || u.usuario);
         var zona = new Set();
         var extra = new Set();
