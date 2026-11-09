@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Generar firebase-config.js desde GitHub Secrets (no se sube al repo)
+      - name: Generar firebase-config.js
+        run: |
+          cat > firebase-config.js <<EOF
+          /**
+           * firebase-config.js — Configuración de Firebase
+           * Generado automáticamente por GitHub Actions desde Secrets.
+           * NO se sube al repositorio; se inyecta en el despliegue.
+           */
+
+          // Valores de Firebase (inyectados desde GitHub Secrets)
+          const FORTA_FIREBASE_CONFIG = {
+              apiKey: "${{ secrets.FIREBASE_API_KEY }}",
+              authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
+              projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
+              storageBucket: "${{ secrets.FIREBASE_STORAGE_BUCKET }}",
+              messagingSenderId: "${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}",
+              appId: "${{ secrets.FIREBASE_APP_ID }}"
+          };
+
+          // Exponer en navegador
+          if (typeof window !== 'undefined') {
+              window.FORTA_FIREBASE_CONFIG = FORTA_FIREBASE_CONFIG;
+          }
+
+          // Exportar para Node.js
+          if (typeof module !== 'undefined' && module.exports) {
+              module.exports = FORTA_FIREBASE_CONFIG;
+          }
+          EOF
+
+      - name: Verificar firebase-config.js generado
+        run: cat firebase-config.js
+
+      - name: Subir sitio a GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Desplegar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,1592 @@
+/* ==========================================================================
+   Dashboard.js — Panel de Fortalecimiento Interno
+   Todas las funciones interactivas del dashboard.
+   Los datos se cargan SOLO desde data/municipios.json via fetch.
+   ========================================================================== */
+
+let allData = [];
+let filteredData = [];
+let charts = {};
+const activeFilters = {
+    distrito_local: new Set(),
+    distrito_federal: new Set(),
+    estatus_estructura: new Set(),
+    coordinador: new Set()
+};
+
+// Establece texto en el banner de contadores solo si existe (puede no estar en el DOM)
+function setSubtitle(text) {
+    var el = document.getElementById('subtitle');
+    if (el) el.textContent = text;
+}
+
+// Cargar datos SOLO desde data/municipios.json via fetch.
+// Requiere servirse por http(s) (ej. npx serve .). No funciona con file:// por CORS.
+// Rol coordinador: solo ve los municipios de su zona (lista en la sesión).
+var fortaScope = null; // numeros de municipio permitidos (null = todos)
+// Coordinador: solo ve la barra de busqueda general (que ya queda limitada a
+// SUS municipios por fortaScope). El buscador de nombres se oculta.
+var fortaSoloBusquedaGeneral = false;
+
+function initData(data) {
+    if (Array.isArray(fortaScope) && fortaScope.length) {
+        var permitidos = {};
+        fortaScope.forEach(function(n) { permitidos[n] = true; });
+        data = data.filter(function(m) { return permitidos[m['numero de municipio']]; });
+    }
+    allData = data;
+
+        // Inicializar secciones extensibles
+        allData.forEach(m => {
+            if (!m.metricas) m.metricas = {};
+            if (!m.etiquetas) m.etiquetas = [];
+            if (!m.metadata) m.metadata = {};
+        });
+
+        setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
+        initFilters();
+        applyFilters();
+}
+
+// Alcance por coordinador (normalizado): zona + municipios compartidos.
+//   zona  -> municipios propios (coordinador_zona en data/municipios.json)
+//   extra -> municipios_adicionales de data/usuarios.json (acceso compartido;
+//            compartir NO cambia el coordinador_zona del municipio)
+var coordinatorScopeMap = {};
+var coordinatorNames = [];
+
+function buildCoordinatorScopeMap(data) {
+    coordinatorScopeMap = {};
+    coordinatorNames = [];
+    ((data && data.usuarios) || []).forEach(function(u) {
+        if (u.rol !== 'coordinador' && u.rol !== 'coordinador_g20') return;
+        var name = nameCase(u.nombre || u.usuario);
+        var zona = new Set();
+        var extra = new Set();
+        (u.municipios || []).forEach(function(n) { zona.add(n); });
+        (u.municipios_adicionales || []).forEach(function(n) { extra.add(n); });
+        var todos = new Set(zona);
+        extra.forEach(function(n) { todos.add(n); });
+        coordinatorScopeMap[name] = { zona: zona, extra: extra, todos: todos };
+        coordinatorNames.push(name);
+    });
+}
+
+// Devuelve true si el municipio pertenece al alcance (zona + compartidos)
+// de ALGUNO de los coordinadores seleccionados.
+function municipioEnCoordinadoresSeleccionados(m, seleccionados) {
+    var num = m['numero de municipio'];
+    var zona = nameCase(m.coordinador_zona);
+    var coincide = false;
+    seleccionados.forEach(function(cn) {
+        if (coincide) return;
+        if (zona && zona === cn) { coincide = true; return; }
+        var sc = coordinatorScopeMap[cn];
+        if (sc && sc.todos.has(num)) coincide = true;
+    });
+    return coincide;
+}
+
+async function loadData() {
+    setSubtitle('Cargando municipios...');
+    var munisData = [];
+    var origen = 'Firestore';
+
+    // 1. Intentar cargar desde Firestore con timeout si está disponible
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            var firestorePromise = (async function() {
+                var munisSnapshot = await window.firebaseFirestore.collection('municipios').get();
+                var list = [];
+                munisSnapshot.forEach(function(doc) {
+                    var d = doc.data();
+                    if (!d['numero de municipio']) d['numero de municipio'] = Number(doc.id);
+                    list.push(d);
+                });
+                return list;
+            })();
+
+            var timeoutPromise = new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('TIMEOUT_FIRESTORE')); }, 2500);
+            });
+
+            munisData = await Promise.race([firestorePromise, timeoutPromise]);
+            console.log('✅ Municipios cargados desde Firestore (' + munisData.length + ')');
+        } catch (err) {
+            console.warn('⚠️ No se pudo obtener municipios de Firestore (' + (err.message || err) + '). Activando respaldo local...');
+            munisData = [];
+        }
+    }
+
+    // 2. Fallback automático a data/municipios.json
+    if (!munisData || !munisData.length) {
+        origen = 'municipios.json (local)';
+        try {
+            var res = await fetch('data/municipios.json', { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            munisData = await res.json();
+            console.log('🔄 Municipios cargados desde respaldo local (' + munisData.length + ')');
+        } catch (err) {
+            console.error('Error cargando municipios desde respaldo local:', err);
+            setSubtitle('ERROR al cargar municipios.');
+            return;
+        }
+    }
+
+    // Normalizar numero de municipio como número en todos los registros
+    munisData.forEach(function(m, idx) {
+        var num = m['numero de municipio'];
+        if (num !== undefined && num !== null && num !== '') {
+            var n = Number(num);
+            if (!isNaN(n)) m['numero de municipio'] = n;
+        } else if (m.id && !isNaN(Number(m.id))) {
+            m['numero de municipio'] = Number(m.id);
+        } else {
+            m['numero de municipio'] = idx + 1;
+        }
+    });
+
+    if (Array.isArray(fortaScope) && fortaScope.length) {
+        var permitidos = {};
+        fortaScope.forEach(function(n) { permitidos[n] = true; permitidos[String(n)] = true; });
+        munisData = munisData.filter(function(m) { return permitidos[m['numero de municipio']]; });
+    }
+
+    allData = munisData;
+
+
+
+    // Inicializar secciones extensibles
+    allData.forEach(function(m) {
+        if (!m.metricas) m.metricas = {};
+        if (!m.etiquetas) m.etiquetas = [];
+        if (!m.metadata) m.metadata = {};
+    });
+
+    setSubtitle(allData.length + ' municipios cargados · Plataforma Forta 2026');
+    var badge = document.querySelector('.data-source-badge');
+    if (badge) {
+        badge.innerHTML = '<i data-lucide="database"></i> ' + origen;
+        try { if (window.lucide) lucide.createIcons(); } catch (e) {}
+    }
+
+    initFilters();
+    applyFilters();
+
+    // 3. Cargar datos de usuarios para coordinadores (zona + compartidos)
+    var usersData = { usuarios: [] };
+    if (typeof window !== 'undefined' && window.firebaseFirestore && origen.indexOf('Firestore') !== -1) {
+        try {
+            var usersSnapshot = await window.firebaseFirestore.collection('usuarios').get();
+            usersSnapshot.forEach(function(doc) {
+                var ud = doc.data();
+                if (!ud.usuario) ud.usuario = doc.id;
+                usersData.usuarios.push(ud);
+            });
+            buildCoordinatorScopeMap(usersData);
+        } catch (uerr) {
+            console.warn('Fallback a usuarios.json para coordinadores...');
+        }
+    }
+
+    if (!usersData.usuarios || !usersData.usuarios.length) {
+        try {
+            var ures = await fetch('data/usuarios.json', { cache: 'no-store' });
+            if (ures.ok) {
+                usersData = await ures.json();
+                buildCoordinatorScopeMap(usersData);
+            }
+        } catch (e) {
+            console.warn('No se pudo cargar data/usuarios.json:', e);
+        }
+    }
+}
+
+
+// Lista de coordinadores que se ofrecen en el filtro: los que aparecen como
+// coordinador_zona de algún municipio visible + los coordinadores usuarios que
+// tienen municipios visibles en su alcance (zona + compartidos). Así un
+// coordinador con municipios COMPARTIDOS (p.ej. Carlos Mejía, que comparte 5
+// municipios de la zona de Miguel Ochoa) también aparece y puede filtrarse.
+function coordinadoresFiltrables() {
+    var visibles = {};
+    allData.forEach(function(m) {
+        var num = m['numero de municipio'];
+        var zona = nameCase(m.coordinador_zona);
+        if (zona) visibles[zona] = true;
+        coordinatorNames.forEach(function(cn) {
+            var sc = coordinatorScopeMap[cn];
+            if (sc && sc.todos.has(num)) visibles[cn] = true;
+        });
+    });
+    return Object.keys(visibles).sort();
+}
+
+// ===== FILTRO DE ESTATUS DE ESTRUCTURA: "SIN ESTRUCTURA" =====
+// Los municipios SIN estructura vienen con `estatus_estructura` vacio (null)
+// en data/municipios.json. Para poder filtrarlos desde el mismo desplegable se
+// usa un valor centinela (que nunca coincide con un estatus real) con una
+// etiqueta visible propia: "Sin estructura".
+var ESTATUS_SIN_ESTRUCTURA = '__sin_estructura__';
+var ESTATUS_SIN_ESTRUCTURA_LABEL = 'Sin estructura';
+
+// Valor de filtro del estatus de un municipio: el texto real o el centinela.
+function estatusFiltroValor(m) {
+    var e = (m.estatus_estructura || '').trim();
+    return e || ESTATUS_SIN_ESTRUCTURA;
+}
+
+// Etiqueta visible de un valor de filtro (tags del drawer y chips activos).
+function filterValueLabel(key, val) {
+    if (key === 'estatus_estructura' && val === ESTATUS_SIN_ESTRUCTURA) {
+        return ESTATUS_SIN_ESTRUCTURA_LABEL;
+    }
+    return val;
+}
+
+// Opciones del desplegable "Estatus de Estructura": los estatus reales que
+// existen en los datos + la opcion virtual "Sin estructura" (centinela).
+function estatusFiltroOpciones() {
+    var valores = Array.from(new Set(allData.map(function(m) {
+        return (m.estatus_estructura || '').trim();
+    }))).filter(function(v) { return v; }).sort();
+    return valores.concat([ESTATUS_SIN_ESTRUCTURA]);
+}
+
+// Mapa valor -> etiqueta visible para el desplegable de estatus.
+function estatusFiltroEtiquetas() {
+    var mapa = {};
+    mapa[ESTATUS_SIN_ESTRUCTURA] = ESTATUS_SIN_ESTRUCTURA_LABEL;
+    return mapa;
+}
+
+// Inicializar filtros (poblar dropdowns)
+function initFilters() {
+    populateMultiSelect('filter-distrito-local',
+        Array.from(new Set(allData.map(m => m.distrito_local))).filter(v => v).sort(),
+        'distrito_local');
+    populateMultiSelect('filter-distrito-federal',
+        Array.from(new Set(allData.map(m => m.distrito_federal))).filter(v => v).sort(),
+        'distrito_federal');
+    // Estatus reales + la opcion virtual "Sin estructura" (centinela).
+    populateMultiSelect('filter-estatus',
+        estatusFiltroOpciones(),
+        'estatus_estructura',
+        estatusFiltroEtiquetas());
+    populateMultiSelect('filter-coordinador', coordinadoresFiltrables(), 'coordinador');
+}
+
+// optionLabels: mapa opcional valor -> etiqueta visible (por defecto, el valor).
+function populateMultiSelect(containerId, options, filterKey, optionLabels) {
+    var container = document.getElementById(containerId);
+    var optionsList = container.querySelector('.options-list');
+    var tagsContainer = container.querySelector('.tags-container');
+    var trigger = container.querySelector('.multi-select__trigger');
+    var countSpan = container.querySelector('.selected-count');
+    var placeholder = container.querySelector('.placeholder');
+    var searchBox = container.querySelector('.option-search');
+
+    optionsList.innerHTML = '';
+    var labels = optionLabels || {};
+    options.forEach(function(opt) {
+        var div = document.createElement('div');
+        div.className = 'multi-select__option';
+        div.innerHTML = '<label class="opt-row"><input type="checkbox" value="' + escapeHtml(opt) + '" data-filter="' + filterKey + '"><span class="opt-label">' + escapeHtml(labels[opt] || opt) + '</span></label>';
+        div.querySelector('input').addEventListener('change', onFilterChange);
+        optionsList.appendChild(div);
+    });
+
+    container.querySelector('.multi-select__options').addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+        trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        container.querySelector('.multi-select__options').classList.toggle('show');
+    });
+    if (searchBox) {
+        searchBox.addEventListener('input', function(e) {
+            // Coincidencia por palabras (AND) en lugar de subcadena contigua:
+            // permite escribir "carlos mejia" y encontrar
+            // "Carlos Alberto Mejía Covarrubias" (las palabras pueden ir en
+            // cualquier orden). Con una sola palabra se comporta igual que antes.
+            var tokens = normText(e.target.value).split(/\s+/).filter(Boolean);
+            container.querySelectorAll('.multi-select__option').forEach(function(opt) {
+                var txt = normText(opt.textContent);
+                var visible = tokens.every(function(t) { return txt.indexOf(t) >= 0; });
+                opt.style.display = visible ? '' : 'none';
+            });
+        });
+    }
+    document.addEventListener('click', function(e) {
+        if (!container.contains(e.target) && !container.querySelector('.multi-select__options').classList.contains('show')) {
+            return;
+        }
+        if (!container.contains(e.target)) {
+            container.querySelector('.multi-select__options').classList.remove('show');
+        }
+    });
+    container._filterKey = filterKey;
+    container._updateTags = function() {
+        var selected = activeFilters[filterKey];
+        tagsContainer.innerHTML = '';
+        selected.forEach(function(val) {
+            var tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.textContent = filterValueLabel(filterKey, val);
+            tag.addEventListener('click', function(e) {
+                e.stopPropagation();
+                activeFilters[filterKey].delete(val);
+                updateFilterUI();
+                applyFilters();
+            });
+            tagsContainer.appendChild(tag);
+        });
+        var checkboxes = container.querySelectorAll('.options-list input[type="checkbox"]');
+        checkboxes.forEach(function(cb) { cb.checked = selected.has(cb.value); });
+        countSpan.textContent = selected.size;
+        placeholder.textContent = selected.size ? selected.size + ' seleccionados' : 'Seleccionar...';
+    };
+}
+
+
+// Actualizar UI de todos los filtros (tags del drawer + chips + badge)
+var FILTER_GROUP_LABELS = {
+    distrito_local: 'D. Local',
+    distrito_federal: 'D. Federal',
+    estatus_estructura: 'Estatus',
+    coordinador: 'Coordinador'
+};
+
+function renderActiveFilterChips() {
+    var bar = document.getElementById('active-filters-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    var total = 0;
+    Object.keys(activeFilters).forEach(function(key) {
+        var values = activeFilters[key];
+        values.forEach(function(val) {
+            total++;
+            var chip = document.createElement('span');
+            chip.className = 'af-chip';
+            chip.innerHTML = '<span class="af-group">' + FILTER_GROUP_LABELS[key] + ':</span>' +
+                escapeHtml(filterValueLabel(key, val)) + '<span class="af-x">×</span>';
+            chip.title = 'Quitar filtro';
+            chip.addEventListener('click', function() {
+                activeFilters[key].delete(val);
+                updateFilterUI();
+                applyFilters();
+            });
+            bar.appendChild(chip);
+        });
+    });
+    var badge = document.getElementById('menu-badge');
+    if (badge) {
+        badge.textContent = total;
+        badge.classList.toggle('show', total > 0);
+    }
+}
+
+function updateFilterUI() {
+    document.querySelectorAll('.multi-select').forEach(function(container) {
+        if (container._updateTags) container._updateTags();
+    });
+    var total = Object.keys(activeFilters).reduce(function(sum, k) { return sum + activeFilters[k].size; }, 0);
+    document.getElementById('clear-all-filters').style.display = total > 0 ? 'flex' : 'none';
+    renderActiveFilterChips();
+}
+
+// Cambio en checkbox de filtro
+function onFilterChange(e) {
+    var cb = e.target;
+    var key = cb.getAttribute('data-filter');
+    var val = cb.value;
+    if (cb.checked) { activeFilters[key].add(val); }
+    else { activeFilters[key].delete(val); }
+    updateFilterUI();
+    applyFilters();
+}
+
+// Limpiar todos los filtros
+document.getElementById('clear-all-filters').addEventListener('click', function() {
+    Object.keys(activeFilters).forEach(function(k) { activeFilters[k].clear(); });
+    document.querySelectorAll('.multi-select__options').forEach(function(o) { o.classList.remove('show'); });
+    updateFilterUI();
+    applyFilters();
+});
+
+// Aplicar filtros a los datos
+function applyFilters() {
+    filteredData = allData.filter(function(m) {
+        if (activeFilters.distrito_local.size > 0 && !activeFilters.distrito_local.has(m.distrito_local)) return false;
+        if (activeFilters.distrito_federal.size > 0 && !activeFilters.distrito_federal.has(m.distrito_federal)) return false;
+        if (activeFilters.estatus_estructura.size > 0 && !activeFilters.estatus_estructura.has(estatusFiltroValor(m))) return false;
+        if (activeFilters.coordinador.size > 0 && !municipioEnCoordinadoresSeleccionados(m, activeFilters.coordinador)) return false;
+        return true;
+    });
+    // Orden alfabetico por nombre de municipio
+    filteredData.sort(function(a, b) {
+        return (a.municipio || '').localeCompare(b.municipio || '', 'es', { sensitivity: 'base' });
+    });
+        visibleCount = 20;
+    renderList();
+}
+
+
+    // ===== DETAIL VIEW =====
+function getTableKeys() {
+    if (filteredData.length === 0) return [];
+    return Object.keys(filteredData[0]).filter(function(k) {
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos'].indexOf(k) === -1;
+    });
+}
+
+var tableSearchTerm = '';
+var personSearchTerm = '';
+var visibleCount = 20;
+
+// Normaliza texto: minúsculas + sin acentos (búsqueda tolerante)
+function normText(s) {
+    return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// ===== MAPEOS Y FORMATOS =====
+// ESTATUS DE ESTRUCTURA: el Excel nuevo trae el nombre completo
+// ("Comité Directivo Municipal", "Delegación Municipal", "Comisión Organizadora").
+// Se clasifica por palabra clave para no depender del acento ni del orden.
+var ESTATUS_COLORES = [
+    ['directivo',    'b-cdm'],   // Comité Directivo Municipal  (verde)
+    ['delegacion',   'b-dm'],    // Delegación Municipal        (naranja)
+    ['organizadora', 'b-co']     // Comisión Organizadora       (azul)
+];
+function estatusClass(v) {
+    var s = normText(v || '');
+    if (!s) return 'none';
+    for (var i = 0; i < ESTATUS_COLORES.length; i++) {
+        if (s.indexOf(ESTATUS_COLORES[i][0]) >= 0) return ESTATUS_COLORES[i][1];
+    }
+    return 'b-x';
+}
+// Clave corta para la tarjeta (el nombre completo va en el titulo y el detalle)
+var ESTATUS_CORTO = [
+    ['directivo',    'CDM'],
+    ['delegacion',   'DM'],
+    ['organizadora', 'CO']
+];
+function estatusShort(v) {
+    var s = normText(v || '');
+    if (!s) return 'Sin estatus';
+    for (var i = 0; i < ESTATUS_CORTO.length; i++) {
+        if (s.indexOf(ESTATUS_CORTO[i][0]) >= 0) return ESTATUS_CORTO[i][1];
+    }
+    return String(v).trim();
+}
+
+// En data/municipios.json los porcentajes ya vienen SIEMPRE en porcentaje real
+// (0-100): build-data.js decide la unidad de cada numero leyendo el formato de la
+// celda en el Excel, asi que aqui no hay que escalar nada. Ojo: un 0.39 guardado
+// en el JSON es 0.39%, no 39%.
+function pctValue(v) {
+    var n = Number(v);
+    if (v === null || v === undefined || v === '' || !isFinite(n)) return null;
+    return n;
+}
+function formatPct(v) {
+    var p = pctValue(v);
+    if (p === null) return '\u2014';
+    return (Math.round(p * 100) / 100).toLocaleString('es-MX') + '%';
+}
+
+// Etiquetas legibles para la exportación y para el bloque "Otros datos"
+var FIELD_LABELS = {
+    'numero de municipio': 'N.º de municipio',
+    'coordinador_zona': 'Coordinador de zona',
+    'prioridad': 'Prioridad',
+    'municipio': 'Municipio',
+    'secciones_detalle': 'Secciones (detalle)',
+    'distrito_local': 'Distrito local',
+    'distrito_federal': 'Distrito federal',
+    'listado_nominal': 'Listado nominal',
+    'secciones': 'Secciones',
+    'rutas': 'Rutas',
+    'casillas': 'Casillas',
+    'total_ediles': 'Total de ediles',
+    'votos_2024_locales': 'Votos 2024 (locales)',
+    'pct_2024_locales': '% 2024 (locales)',
+    'votos_2024_federales': 'Votos 2024 (federales)',
+    'pct_2024_federales': '% 2024 (federales)',
+    'votos_2025_alcaldes': 'Votos 2025 (alcaldes)',
+    'pct_2025': '% 2025',
+    'pp_diputado_federal': '(PP) Diputado federal',
+    'pp_diputado_local': '(PP) Diputado local',
+    'pp_presidente_municipal': '(PP) Presidente municipal',
+    'regidores_pan': 'Regidores del PAN',
+    'militantes': 'Militantes',
+    'consejero_estatal': 'Consejero estatal',
+    'estatus_estructura': 'Estatus de estructura',
+    'soldados': 'Meta soldados dic (2026)',
+    'meta_afiliados': 'Meta afiliados dic (2026)',
+    'vigencia': 'Vigencia',
+    'presidente_estructura': 'Presidente de estructura',
+    'presidente_genero': 'Género presidente',
+    'presidente_telefono': 'Teléfono presidente',
+    'secretario_general': 'Secretario general',
+    'secretario_genero': 'Género secretario',
+    'secretario_telefono': 'Teléfono secretario',
+    'secretario_fecha_nacimiento': 'Fecha nacimiento secretario'
+};
+function fieldLabel(k) { return FIELD_LABELS[k] || k; }
+
+
+// Busqueda global: revisa TODOS los campos de cada municipio (incluye metricas,
+// etiquetas y metadata) sin importar el nivel de anidacion.
+// - Tolera acentos y mayúsculas ("panuco" encuentra "PÁNUCO")
+// - Varios términos separados por espacio: TODOS deben coincadir
+//   en algún campo ("01 panuco" o "vitas tlanepantla")
+// - Números en varios formatos: 10728, "10,728", 14.8926 o "14,89"
+function matchesGlobalSearch(m, term) {
+    if (!term) return true;
+    var tokens = normText(term).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+
+    function numberMatches(v, token) {
+        var s = String(v);
+        if (s.includes(token)) return true;
+        if (v.toLocaleString('es-MX').toLowerCase().includes(token)) return true;
+        if (token.indexOf(',') >= 0) {
+            // formato mexicano: "10,728" (miles) o "14,89" (decimal)
+            if (s.includes(token.replace(/,/g, ''))) return true;      // 10728
+            if (s.includes(token.replace(',', '.'))) return true;      // 14.8926
+        }
+        return false;
+    }
+
+    function valueMatches(v, token) {
+        if (v === null || v === undefined) return false;
+        if (typeof v === 'number') return numberMatches(v, token);
+        if (typeof v === 'string') return normText(v).includes(token);
+        if (Array.isArray(v)) return v.some(function(x) { return valueMatches(x, token); });
+        if (typeof v === 'object') return Object.keys(v).some(function(k) {
+            return normText(k).includes(token) || valueMatches(v[k], token);
+        });
+        return false;
+    }
+
+    return tokens.every(function(token) { return valueMatches(m, token); });
+}
+
+// Busqueda de nombres: solo municipio + personas.
+// Revisa nombre del municipio, coordinador de zona, presidente y secretario
+// (nombre, telefono), regidores del PAN, consejero estatal y los candidatos
+// tras el guion de (PP) diputado local/federal y (PP) presidente municipal.
+// Los terminos separados por espacio deben coincidir TODOS (AND) dentro del
+// MISMO campo de persona ("garcia lopez" encuentra "JUAN GARCIA LOPEZ").
+function matchesNamesSearch(m, term) {
+    if (!term) return true;
+    var tokens = normText(term).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+
+    // De "MORENA - VERDE - PT - Tania Maria Cruz Mejia" saca el nombre del
+    // candidato (lo que va tras el ultimo guion); si no hay guion, todo.
+    function candidateName(v) {
+        var s = String(v == null ? '' : v);
+        var i = s.lastIndexOf('-');
+        return (i >= 0 ? s.slice(i + 1) : s).trim();
+    }
+
+    var fields = [
+        m.municipio,
+        m.coordinador_zona,
+        m.presidente_estructura,
+        m.presidente_telefono,
+        m.secretario_general,
+        m.secretario_telefono,
+        m.regidores_pan,
+        m.consejero_estatal,
+        candidateName(m.pp_diputado_local),
+        candidateName(m.pp_diputado_federal),
+        candidateName(m.pp_presidente_municipal)
+    ];
+
+    var hay = fields.map(function(f) { return normText(f || ''); });
+    return hay.some(function(h) {
+        return tokens.every(function(token) { return h.indexOf(token) >= 0; });
+    });
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Normaliza un nombre de persona: primera letra mayuscula y el resto minusculas
+// por cada palabra (ej. "FELIPE LOPEZ" -> "Felipe Lopez", "MARIA DEL CARMEN" -> "Maria Del Carmen").
+function nameCase(s) {
+    if (s == null) return '';
+    return String(s)
+        .trim()
+        .split(/\s+/)
+        .map(function(p) {
+            if (!p) return '';
+            return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+        })
+        .join(' ');
+}
+
+// Extrae solo el nombre de una cadena tipo "PARTIDO - Nombre Apellido" y lo normaliza.
+// Si no hay guion, devuelve toda la cadena normalizada.
+function personName(v) {
+    var s = String(v == null ? '' : v);
+    var i = s.lastIndexOf('-');
+    var nombre = (i >= 0 ? s.slice(i + 1) : s).trim();
+    return nameCase(nombre);
+}
+
+// Devuelve "PARTIDO - Nombre" para mostrar el nombre junto con su partido político.
+// Ejemplo: "MORENA - Ramon Diaz Avila" -> "MORENA - Ramon Diaz Avila"
+// Si no hay guion, devuelve la cadena normalizada completa.
+function personParty(v) {
+    var s = String(v == null ? '' : v);
+    var i = s.lastIndexOf('-');
+    if (i < 0) return nameCase(s.trim());
+    var partido = s.slice(0, i).trim();
+    var nombre = nameCase(s.slice(i + 1).trim());
+    return partido + ' - ' + nombre;
+}
+
+function formatNum(v) {
+    return (typeof v === 'number') ? v.toLocaleString('es-MX') : '\u2014';
+}
+
+function renderList() {
+    var listEl = document.getElementById('muni-list');
+    var loadBtn = document.getElementById('load-more-btn');
+    listEl.innerHTML = '';
+    // Coordinador: solo la busqueda general (sobre SUS municipios).
+    var data = filteredData.filter(function(m) {
+        if (!matchesGlobalSearch(m, tableSearchTerm)) return false;
+        if (fortaSoloBusquedaGeneral) return true;
+        return matchesNamesSearch(m, personSearchTerm);
+    });
+
+    if (data.length === 0) {
+        listEl.innerHTML = '<div class="list-empty">No se encontraron municipios con los criterios seleccionados.</div>';
+        loadBtn.style.display = 'none';
+    } else {
+        data.slice(0, visibleCount).forEach(function(m) {
+            var est = (m.estatus_estructura || '').trim();
+            var card = document.createElement('div');
+            card.className = 'muni-card';
+            card.innerHTML =
+                '<div class="muni-card__head">' +
+                    '<span class="muni-card__name">' + escapeHtml(m.municipio || 'Sin nombre') + '</span>' +
+                    '<span class="muni-card__badge ' + estatusClass(est) + '" title="' + escapeHtml(est || 'Sin estatus de estructura') + '">' + escapeHtml(estatusShort(est)) + '</span>' +
+                '</div>' +
+                '<div class="muni-card__districts">DL: <em>' + escapeHtml(m.distrito_local || '\u2014') + '</em> &nbsp;·&nbsp; DF: <em>' + escapeHtml(m.distrito_federal || '\u2014') + '</em></div>';
+            card.addEventListener('click', function() { openDetail(m['numero de municipio'], m); });
+            listEl.appendChild(card);
+        });
+
+        if (data.length > visibleCount) {
+            loadBtn.style.display = 'inline-flex';
+            loadBtn.innerHTML = '<i data-lucide="chevrons-down" style="width:14px;height:14px;"></i> Mostrar más (' + (data.length - visibleCount) + ' restantes)';
+        } else {
+            loadBtn.style.display = 'none';
+        }
+    }
+    var countLabel = document.getElementById('subtitle');
+    if (countLabel) {
+        var busca = [];
+        if (tableSearchTerm) busca.push('general: "' + tableSearchTerm + '"');
+        if (personSearchTerm) busca.push('nombres: "' + personSearchTerm + '"');
+        setSubtitle(data.length + ' municipios' + (busca.length ? ' (búsqueda ' + busca.join(' + ') + ')' : '') + ' · ' + allData.length + ' totales');
+    }
+    try { if (lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
+}
+
+
+// ===== VISTA DE DETALLE =====
+function detailItem(label, value, cls, full) {
+    var display = (value === null || value === undefined || value === '') ? '\u2014' : value;
+    return '<div class="detail-item' + (full ? ' full' : '') + '">' +
+        '<div class="dt-label">' + label + '</div>' +
+        '<div class="dt-value ' + (cls || '') + '">' + escapeHtml(display) + '</div>' +
+    '</div>';
+}
+
+// Lista de localidades del municipio como DESPLEGABLE: queda OCULTA hasta que
+// el usuario hace clic (si no, la lista larga alargaba el detalle). Al pintar:
+//   - se quita la clave numerica del PEL ("1. ACAJETE" -> "ACAJETE");
+//   - se quita el numero romano final de seccion (I, II, III, IV) cuando va
+//     suelto ("URSULO GALVAN II" -> "URSULO GALVAN"), respetando el parentesis
+//     ("ZACATE COLORADO II (FRATERNIDAD)" -> "ZACATE COLORADO (FRATERNIDAD)");
+//   - si el romano hacia que la MISMA localidad apareciera dos veces en el
+//     municipio (base + variante), se muestra UNA sola vez (ALAMO TEMAPACHE:
+//     URSULO GALVAN / URSULO GALVAN II -> un URSULO GALVAN).
+// NO se colapsan nombres identicos SIN romano: son localidades distintas y se
+// muestran todas. El valor original (con clave y romano) sigue intacto en
+// secciones_detalle para la busqueda/exportacion; aqui solo se pinta distinto.
+// Se usa <details>/<summary> nativo: se despliega al dar clic sin JS.
+function detailLocalidades(detalle, enHero) {
+    var raw = String(detalle || '').trim();
+    if (!raw) return detailItem('Localidades', '', 'dim', true);
+    var items = raw.split('|').map(function(t) {
+        return t.trim().replace(/^\d+\.\s*/, '');   // quita la clave inicial
+    }).filter(Boolean);
+    // quita UN numero romano final suelto (respeta parentesis y fin de cadena)
+    var limpios = items.map(function(n) {
+        return n.replace(/\s+(?:IV|III|II|I)(?=\s*(?:\(|$))/, '').trim();
+    });
+    // un nombre colapsa si alguna de sus entradas perdio el romano (existe la
+    // base Y la variante en este municipio); esas se muestran una sola vez.
+    var col = {};
+    limpios.forEach(function(l, i) { if (items[i] !== l) col[l] = true; });
+    var vistos = {};
+    var nombres = [];
+    limpios.forEach(function(l) {
+        if (col[l]) { if (!vistos[l]) { vistos[l] = 1; nombres.push(l); } }
+        else { nombres.push(l); }
+    });
+    var out = '<div class="' + (enHero ? 'loc-hero loc-details' : 'detail-item full loc-details') + '">';
+    out += '<details>';
+    out += '<summary class="loc-toggle"><svg class="map-pin-svg" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg><span class="loc-toggle__t">Localidades</span> <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<div class="loc-list">';
+    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(n) + '</div>'; });
+    out += '</div></details></div>';
+    return out;
+}
+
+// Lista compacta/discreta (Regidores, Consejero): mismo desplegable que
+// Localidades pero en version mini. El valor viene como "A - B - C" o
+// "A, B, C"; se parte en nombres y se pinta en pills numeradas dentro de un
+// <details> cerrado. Sin valor muestra el MISMO boton plegado pero atenuado
+// (dim) con contador 0 y sin lista.
+function detailPeopleList(label, raw, icon) {
+    var txt = String(raw || '').trim();
+    if (!txt) {
+        var out = '<div class="detail-item full loc-details people-details people-empty">';
+        out += '<details>';
+        out += '<summary class="loc-toggle people-toggle"><i data-lucide="' + icon + '"></i><span class="loc-toggle__t">' + label + '</span> <span class="loc-count">0</span></summary>';
+        out += '</details></div>';
+        return out;
+    }
+    var nombres = txt.split(/\s*[|,;]\s*|\s+-\s+/).map(function(t) { return t.trim(); }).filter(Boolean);
+    if (!nombres.length) nombres = [txt];
+    var out = '<div class="detail-item full loc-details people-details">';
+    out += '<details>';
+    out += '<summary class="loc-toggle people-toggle"><i data-lucide="' + icon + '"></i><span class="loc-toggle__t">' + label + '</span> <span class="loc-count">' + nombres.length + '</span></summary>';
+    out += '<div class="loc-list">';
+    nombres.forEach(function(n, i) { out += '<div class="loc-pill"><span class="loc-num">' + (i + 1) + '</span>' + escapeHtml(nameCase(n)) + '</div>'; });
+    out += '</div></details></div>';
+    return out;
+}
+
+// Normaliza un telefono para enlaces tel: / WhatsApp (solo digitos, +52 si son 10)
+function phoneTel(phone) {
+    if (!phone) return '';
+    var d = String(phone).replace(/\D/g, '');
+    if (d.length === 10) return '+52' + d;
+    if (d.length === 11 && d.charAt(0) === '1') return '+' + d;
+    if (d.length > 0) return '+' + d;
+    return '';
+}
+function phoneWa(phone) { var t = phoneTel(phone).replace(/\+/g, ''); return t; }
+// Abre el menu Marcar / WhatsApp para el numero tocado
+function openCallSheet(name, phone, tel) {
+    var ov = document.getElementById('call-sheet-overlay');
+    if (!ov) { if (tel) window.location.href = 'tel:' + tel; return; }
+    var nEl = document.getElementById('call-sheet-name');
+    var pEl = document.getElementById('call-sheet-num');
+    var tEl = document.getElementById('call-sheet-tel');
+    var wEl = document.getElementById('call-sheet-wa');
+    if (nEl) nEl.textContent = name || 'Contacto';
+    if (pEl) pEl.textContent = phone || '';
+    if (tEl) tEl.href = tel ? ('tel:' + tel) : '#';
+    if (wEl) wEl.href = tel ? ('https://wa.me/' + String(tel).replace(/\+/g, '')) : '#';
+    ov.classList.add('open');
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
+}
+function closeCallSheet() {
+    var ov = document.getElementById('call-sheet-overlay');
+    if (ov) ov.classList.remove('open');
+}
+
+function openDetail(id, municipioObj) {
+    var m = municipioObj || allData.find(function(x) {
+        return x['numero de municipio'] === id ||
+               String(x['numero de municipio']) === String(id) ||
+               (Number(x['numero de municipio']) === Number(id) && !isNaN(Number(id))) ||
+               (x.municipio && id && String(x.municipio).toLowerCase().trim() === String(id).toLowerCase().trim());
+    });
+    if (!m) return;
+    var content = document.getElementById('detail-content');
+    var est = (m.estatus_estructura || '').trim();
+
+    var html = '';
+    html += '<div class="detail-hero">';
+    // Boton de mapa junto al nombre: abre Google Maps con el municipio en Veracruz.
+    // Usamos la busqueda de Maps (api=1&query=), que no requiere coordenadas.
+    var jsMun = String(m.municipio || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    html += '<div class="detail-hero-main">';
+    html += '<div class="detail-hero-txt">';
+    html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
+    html += '<div class="detail-title-row">';
+    html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
+    html += '<button type="button" class="detail-map-btn" title="Ver ubicación en Google Maps" aria-label="Ver ubicación en Google Maps" onclick="verUbicacion(\'' + jsMun + '\')"><i data-lucide="map-pin" style="width:16px;height:16px;"></i></button>';
+    html += '</div>';
+    html += '<div class="detail-sub">' + (est ? escapeHtml(est) : 'Sin estatus de estructura') + '</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '<div class="detail-hero-chips">';
+    if (est) html += '<span class="hero-chip">' + escapeHtml(estatusShort(est)) + '</span>';
+    if (m.distrito_local) html += '<span class="hero-chip">DL: ' + escapeHtml(String(m.distrito_local)) + '</span>';
+    if (m.distrito_federal) html += '<span class="hero-chip">DF: ' + escapeHtml(String(m.distrito_federal)) + '</span>';
+    html += '</div>';
+    // Localidades integradas en el hero (arriba de la ficha), como acceso
+    // rapido: el desplegable va dentro del encabezado institucional, no como
+    // seccion suelta en el cuerpo.
+    html += detailLocalidades(m.secciones_detalle, true);
+    html += '</div>';
+
+    // 2) GRAFICAS: un pastel por votacion, una rebanada por partido en su color.
+    //    Van JUSTO TRAS el hero (nombre + estatus), que es lo mas importante,
+    //    a peticion. El % de cada partido es sobre el total de votos A PARTIDOS
+    //    del municipio (sin coaliciones, ni candidatos independientes, ni votos
+    //    nulos). Fuente: SEE. El total del pastel es data.total, no los votos
+    //    oficiales.
+    var vp = m.votos_partidos || {};
+    html += '<div class="detail-section"><h3>Votaciones · Votos por partido</h3>';
+    html += '<div class="chart-hero pie-hero" data-pie-track>';
+    ORDEN_VOTACIONES.forEach(function(et, i) {
+        var v = vp[et];
+        var cid = 'pie-' + i + '-' + m['numero de municipio'];
+        html += '<div class="chart-pie-card">';
+        html += '<div class="chart-pie-label">' + et + '<br>' + formatNum(v ? v.total : 0) + ' votos a partidos</div>';
+        html += '<canvas class="chart-pie" id="' + cid + '"></canvas>';
+        html += '<div class="chart-pie-legend">';
+        if (v && v.barras && v.total) {
+            v.barras.slice().sort(function(a, b) { return b.votos - a.votos; }).forEach(function(b) {
+                var col = PARTIDO_COLOR[b.partido] || '#7a8aa8';
+                html += '<span class="bl-item" style="--c:' + col + '">' + escapeHtml(b.partido) + ' <b>' + b.pct.toFixed(1) + '%</b></span>';
+            });
+        } else {
+            html += '<span class="bl-item">Sin datos</span>';
+        }
+        html += '</div></div>';
+    });
+    html += '</div>';
+    html += '<div class="pie-dots" data-pie-dots><i class="on"></i><i></i><i></i></div>';
+    html += '</div>';
+
+    // Genero legible (el Excel trae "F"/"M")
+    function generoLabel(g) {
+        var s = normText(g);
+        return s === 'f' ? 'Femenino' : (s === 'm' ? 'Masculino' : (g || ''));
+    }
+    // Fila de contacto ligera: nombre con enfasis + numero que abre menu Marcar/WhatsApp
+    function contactRow(role, name, gender, phone) {
+        var tel = phoneTel(phone || '');
+        var safeName = escapeHtml(nameCase(name) || 'Sin asignar');
+        var safePhone = escapeHtml(phone || '');
+        var jsName = String(name || role).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var jsPhone = String(phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var out = '<div class="contact-row">';
+        out += '<span class="contact-row__txt"><span class="contact-role">' + escapeHtml(role) + (gender ? ' · ' + escapeHtml(gender) : '') + '</span><br>';
+        out += '<span class="contact-name">' + safeName + '</span></span>';
+        if (tel) {
+            out += '<button type="button" class="contact-phone" onclick="openCallSheet(\'' + jsName + '\',\'' + jsPhone + '\',\'' + escapeHtml(tel) + '\')"><i data-lucide="phone"></i> ' + safePhone + '</button>';
+        } else {
+            out += '<span class="contact-nophone">Sin número</span>';
+        }
+        out += '</div>';
+        return out;
+    }
+    var presTel0 = m.presidente_telefono || '';
+    var secTel0 = m.secretario_telefono || '';
+
+    // 2) CONTACTOS primero: nombres con enfasis + numero clicable
+    html += '<div class="detail-section"><h3>Dirigentes del municipio · Contactos</h3>';
+    html += '<div class="contact-list">';
+    html += contactRow('Presidente de estructura', m.presidente_estructura || '', generoLabel(m.presidente_genero), presTel0);
+    html += contactRow('Secretario general', m.secretario_general || '', generoLabel(m.secretario_genero), secTel0);
+    html += '</div></div>';
+
+    // (Las graficas de "Votos por partido" ya se pintan JUSTO TRAS el hero, al
+    // principio de la ficha — ver mas arriba. Aqui habia un segundo bloque
+    // duplicado que reusaba los mismos IDs de canvas pie-i-N y pisaba los
+    // pasteles; se elimino.)
+
+    // Electoral: listado nominal, secciones, casillas, rutas, ediles
+    // y distritos. (Sube aqui a peticion: ahora va ANTES de Organizacion
+    // partidista, y Localidades va antes que ella.)
+    html += '<div class="detail-section"><h3>Electoral</h3>';
+    html += '<div class="detail-grid">';
+    html += detailItem('Listado Nominal', formatNum(m.listado_nominal), 'big');
+    html += detailItem('Secciones', formatNum(m.secciones), 'big');
+    html += detailItem('Casillas', formatNum(m.casillas), 'big');
+    html += detailItem('Rutas', m.rutas != null ? formatNum(m.rutas) : '—', m.rutas != null ? 'big' : 'dim');
+    html += detailItem('Total de Ediles', m.total_ediles != null ? formatNum(m.total_ediles) : '—', m.total_ediles != null ? 'big' : 'dim');
+    html += detailItem('Militantes', m.militantes != null ? formatNum(m.militantes) : '—', m.militantes != null ? 'big' : 'dim');
+    html += detailItem('Distrito Local', m.distrito_local || '', '', true);
+    html += detailItem('Distrito Federal', m.distrito_federal || '', '', true);
+    html += '</div></div>';
+
+    // La fecha de nacimiento del secretario se quito del dashboard a peticion
+    // (dato personal). El valor sigue intacto en secretario_fecha_nacimiento
+    // para la exportacion y en data/municipios.json; aqui solo no se pinta.
+
+    // Organización partidista: coordinador, zona, fuerza territorial, estatus y vigencia
+    html += '<div class="detail-section"><h3>Organización partidista</h3><div class="detail-grid">';
+    html += detailItem('Coordinador de zona', nameCase(m.coordinador_zona) || '', '', true);
+    html += detailItem('Meta soldados dic (2026)', formatNum(m.soldados), 'big');
+    html += detailItem('Meta afiliados dic (2026)', formatNum(m.meta_afiliados), 'big');
+    html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim', true);
+    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim', true);
+    html += '</div></div>';
+
+    // La seccion "Resultados electorales" (votos/% del Excel del Panel) se quito
+    // del detalle a peticion: esa informacion ya la muestran las graficas de
+    // "Votos por partido" (desde los SEE). Los campos votos_2024_* / pct_* siguen
+    // intactos en el JSON y en la exportacion; aqui solo no se pintan.
+
+    // Gobierno (del Excel)
+    var ppFed = m.pp_diputado_federal || '';
+    var ppLoc = m.pp_diputado_local || '';
+    var ppPre = m.pp_presidente_municipal || '';
+    var ediles = m.regidores_pan || '';
+    var consejero = m.consejero_estatal || '';
+    if (ppFed || ppLoc || ppPre || ediles || consejero) {
+        html += '<div class="detail-section"><h3>Gobierno</h3><div class="detail-grid">';
+        html += detailItem('(PP) Diputado Federal', personParty(ppFed), ppFed ? '' : 'dim', true);
+        html += detailItem('(PP) Diputado Local', personParty(ppLoc), ppLoc ? '' : 'dim', true);
+        html += detailItem('(PP) Presidente Municipal', personParty(ppPre), ppPre ? '' : 'dim', true);
+        html += detailPeopleList('Regidores del PAN', ediles, 'users');
+        html += detailPeopleList('Consejero estatal', consejero, 'badge-check');
+        html += '</div></div>';
+    }
+
+    var metricas = m.metricas || {};
+    var metricKeys = Object.keys(metricas);
+    if (metricKeys.length) {
+        html += '<div class="detail-section"><h3>Métricas Personalizadas</h3><div class="detail-grid">';
+        metricKeys.forEach(function(k) {
+            var v = metricas[k];
+            var display = (typeof v === 'number') ? formatNum(Math.round(v * 100) / 100) : v;
+            html += detailItem(escapeHtml(k), display);
+        });
+        html += '</div></div>';
+    }
+
+    var etiquetas = m.etiquetas || [];
+    if (etiquetas.length) {
+        html += '<div class="detail-section"><h3>Etiquetas</h3><div class="tags-container">';
+        etiquetas.forEach(function(t) {
+            html += '<span class="tag" style="cursor:default;">' + escapeHtml(t) + '</span>';
+        });
+        html += '</div></div>';
+    }
+
+    var meta = m.metadata || {};
+    var metaKeys = Object.keys(meta);
+    if (metaKeys.length) {
+        html += '<div class="detail-section"><h3>Metadata</h3><div class="detail-grid">';
+        metaKeys.forEach(function(k) {
+            html += detailItem(escapeHtml(k), meta[k], '', true);
+        });
+        html += '</div></div>';
+    }
+
+    html += '<div class="detail-footer">' +
+        '<span>Plataforma Forta 2026</span>' +
+        '<span class="detail-footer-sep">·</span>' +
+        '<span>Municipio ' + m['numero de municipio'] + ' de 212</span>' +
+        '</div>';
+
+    content.innerHTML = html;
+    document.getElementById('detail-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
+
+    // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
+    var vp = m.votos_partidos || {};
+    ORDEN_VOTACIONES.forEach(function(et, i) {
+        renderDetailPie('pie-' + i + '-' + m['numero de municipio'], vp[et]);
+    });
+
+    // Carrusel movil (<=640px): las graficas se deslizan y se AUTO-CENTRAN solas.
+    // Sencillo, sin clones ni teleports.
+    // - Auto-play: avanza una tarjeta cada 3.2s y, al pasar de la ultima,
+    //   vuelve a la primera. Los puntitos siguen siempre la tarjeta centrada.
+    // - Al tocar se pausa; al soltar el dedo la tarjeta mas cercana se centra
+    //   con una animacion suave (easing). En escritorio van las 3 en fila.
+    try {
+        var mq = window.matchMedia ? window.matchMedia('(max-width:640px)') : { matches: false };
+        var track = content.querySelector('[data-pie-track]');
+        var dotsBox = content.querySelector('[data-pie-dots]');
+        if (mq.matches && track && dotsBox) {
+            var dots = dotsBox.querySelectorAll('i');
+            var cards = track.querySelectorAll('.chart-pie-card');
+            var n = cards.length;
+            if (n && dots.length) {
+                var idx = 0;   // tarjeta actualmente centrada
+
+                // Centro en px de scroll que deja la tarjeta k centrada.
+                var centerOf = function(k) {
+                    if (k < 0) k = 0;
+                    if (k > n - 1) k = n - 1;
+                    var tb = track.getBoundingClientRect();
+                    var cb = cards[k].getBoundingClientRect();
+                    var target = (cb.left - tb.left + track.scrollLeft) + cb.width / 2 - track.clientWidth / 2;
+                    var max = track.scrollWidth - track.clientWidth;
+                    if (target < 0) target = 0;
+                    if (target > max) target = max;
+                    return target;
+                };
+                // Tarjeta (0..n-1) cuyo centro queda mas centrado ahora.
+                var nearestIndex = function() {
+                    var tb = track.getBoundingClientRect();
+                    var center = tb.left + tb.width / 2;
+                    var best = 0, bestD = Infinity;
+                    for (var k = 0; k < n; k++) {
+                        var cb = cards[k].getBoundingClientRect();
+                        var d = Math.abs((cb.left + cb.width / 2) - center);
+                        if (d < bestD) { bestD = d; best = k; }
+                    }
+                    return best;
+                };
+
+                // --- 3) Motor de animacion (rAF + easing easeInOutCubic) ---
+                var rafId = 0;
+                var anim = null;   // {from,to,t0,dur} mientras anima
+                var EASE = function(p) { // arranca y frena suave
+                    return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+                };
+                var paint = function() {
+                    idx = nearestIndex();
+                    for (var j = 0; j < dots.length; j++) {
+                        if (dots[j].classList) dots[j].classList.toggle('on', j === idx);
+                    }
+                };
+                var frame = function(t) {
+                    if (!anim) return;
+                    if (!anim.t0) anim.t0 = t;
+                    var p = Math.min((t - anim.t0) / anim.dur, 1);
+                    track.scrollLeft = anim.from + (anim.to - anim.from) * EASE(p);
+                    paint();
+                    if (p < 1) rafId = requestAnimationFrame(frame);
+                    else anim = null;
+                };
+                var goTo = function(k) {
+                    if (k < 0) k = 0;
+                    if (k > n - 1) k = n - 1;
+                    if (rafId) cancelAnimationFrame(rafId);
+                    anim = { from: track.scrollLeft, to: centerOf(k), t0: 0, dur: 620 };
+                    rafId = requestAnimationFrame(frame);
+                };
+
+                // --- 4) Auto-play: avanza y, tras la ultima, vuelve a la primera ---
+                var autoId = 0, paused = false, dragging = false, snapT = 0;
+                var stopAuto = function() { if (autoId) { clearInterval(autoId); autoId = 0; } };
+                var step = function() { goTo(idx + 1 > n - 1 ? 0 : idx + 1); };
+                var startAuto = function() {
+                    stopAuto();
+                    if (!paused) autoId = setInterval(function() { if (!dragging) step(); }, 3200);
+                };
+                // Centra la tarjeta mas cercana cuando el dedo ya no se mueve.
+                var scheduleSnap = function() {
+                    clearTimeout(snapT);
+                    snapT = setTimeout(function() { if (!dragging) goTo(nearestIndex()); }, 140);
+                };
+
+                // --- 5) Interaccion del usuario ---
+                // Toque: pausa el auto-play y cancela la animacion en curso.
+                track.addEventListener('pointerdown', function() {
+                    dragging = true; paused = true; stopAuto();
+                    if (rafId) cancelAnimationFrame(rafId); anim = null; clearTimeout(snapT);
+                });
+                // Al soltar: auto-centra la tarjeta mas cercana y reanuda.
+                track.addEventListener('pointerup', function() {
+                    dragging = false; paused = false;
+                    goTo(nearestIndex());
+                    startAuto();
+                });
+                track.addEventListener('pointercancel', function() { dragging = true; paused = true; stopAuto(); });
+
+                // Mientras se desliza a mano sigue los puntitos y, al detenerse,
+                // auto-centra (solo si no hay animacion del auto-play en curso).
+                track.addEventListener('scroll', function() {
+                    if (rafId) cancelAnimationFrame(rafId);
+                    rafId = requestAnimationFrame(paint);
+                    if (!anim) scheduleSnap();
+                }, { passive: true });
+
+                window.addEventListener('resize', function() { goTo(nearestIndex()); });
+
+                // Arranque en la primera grafica.
+                goTo(0);
+                startAuto();
+            }
+        }
+    } catch (e) {
+        // Sin afectar el resto de la ficha si el carrusel falla.
+    }
+}
+
+// Orden fijo de las votaciones en el detalle y color de cada partido.
+// El pastel usa el color del partido, asi que aqui vive la paleta.
+var ORDEN_VOTACIONES = ['2025 alcaldes', '2024 locales', '2024 federales'];
+var PARTIDO_COLOR = {
+    'PAN': '#003f87',    // azul PAN
+    'PRI': '#006341',    // verde bandera de Mexico
+    'PRD': '#f2c200',    // amarillo PRD
+    'PVEM': '#8bc34a',   // verde claro PVEM
+    'PT': '#C8102E',     // rojo PT / rojo bandera
+    'MC': '#f07d13',     // naranja MC
+    'MORENA': '#5C0C2D'  // guinda oscuro MORENA
+};
+
+// Pastel de una votacion: una rebanada por partido, en el color del partido.
+// El total del pastel es data.total (suma de votos A PARTIDOS del municipio,
+// ya sin coaliciones, ni candidatos independientes, ni votos nulos); Chart.js
+// calcula cada rebanada como votos/total, o sea el mismo % de la leyenda.
+function renderDetailPie(canvasId, data) {
+    if (!window.Chart) return;
+    var canvas = document.getElementById(canvasId);
+    if (!canvas || !data || !data.barras || !data.barras.length) return;
+    var barras = data.barras.slice().sort(function(a, b) { return b.votos - a.votos; });
+    var ctx = canvas.getContext('2d');
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: barras.map(function(b) { return b.partido; }),
+            datasets: [{
+                data: barras.map(function(b) { return b.votos; }),
+                backgroundColor: barras.map(function(b) { return PARTIDO_COLOR[b.partido] || '#7a8aa8'; }),
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: false,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                datalabels: { display: false },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: function(c) {
+                            var b = barras[c.dataIndex];
+                            return ' ' + b.partido + ': ' + b.votos.toLocaleString('es-MX') + ' votos · ' + b.pct.toFixed(2) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+// Boton "Ver ubicacion": abre Google Maps con la busqueda del municipio en
+// Veracruz. Usa la API universal de Maps (https://www.google.com/maps/search/?
+// api=1&query=...), que no necesita coordenadas: basta con el nombre del lugar.
+// En movil abre la app si esta instalada; si no, la version web. Se suma
+// ", Veracruz" para desambiguar de municipios homonimos de otros estados.
+function verUbicacion(municipio) {
+    var nombre = (municipio || '').toString().trim();
+    if (!nombre) return;
+    var query = nombre + ', Veracruz, Mexico';
+    var url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+    window.open(url, '_blank', 'noopener');
+}
+
+
+function closeDetail() {
+    document.getElementById('detail-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('detail-close').addEventListener('click', closeDetail);
+document.getElementById('detail-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeDetail();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeDetail(); closeCallSheet(); closeExportSheet(); }
+});
+// Menu Marcar / WhatsApp: cerrar al tocar fuera o Cancelar
+try {
+    var _csOv = document.getElementById('call-sheet-overlay');
+    var _csCancel = document.getElementById('call-sheet-cancel');
+    if (_csOv) _csOv.addEventListener('click', function(e) { if (e.target === this) closeCallSheet(); });
+    if (_csCancel) _csCancel.addEventListener('click', closeCallSheet);
+} catch(e) {}
+// Menu Exportar: cerrar al tocar fuera o Cancelar
+try {
+    var _exOv = document.getElementById('export-sheet-overlay');
+    var _exCancel = document.getElementById('export-sheet-cancel');
+    if (_exOv) _exOv.addEventListener('click', function(e) { if (e.target === this) closeExportSheet(); });
+    if (_exCancel) _exCancel.addEventListener('click', closeExportSheet);
+} catch(e) {}
+
+// Mostrar mas municipios
+document.getElementById('load-more-btn').addEventListener('click', function() {
+    visibleCount += 20;
+    renderList();
+});
+
+// Busqueda general (lista): revisa todos los campos de cada municipio
+document.getElementById('table-search').addEventListener('input', function(e) {
+    tableSearchTerm = e.target.value.toLowerCase().trim();
+    visibleCount = 20;
+    renderList();
+});
+
+// Busqueda de nombres (lista): solo municipios y personas
+document.getElementById('person-search').addEventListener('input', function(e) {
+    personSearchTerm = e.target.value.toLowerCase().trim();
+    visibleCount = 20;
+    renderList();
+});
+
+
+// ===== EXPORTAR EXCEL (móvil: descargar o compartir por WhatsApp) =====
+// Construye el Excel/CSV de los datos visibles y abre el menú de exportar
+// (descargar, compartir .xlsx, compartir .csv por WhatsApp).
+// filenameBase: prefijo del archivo (ej. 'municipios_filtrados' o 'municipios_felipe_lopez').
+function buildAndOpenExport(filenameBase) {
+    if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
+    var keys = Object.keys(filteredData[0]).filter(function(k) {
+        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos', 'zona'].indexOf(k) === -1;
+    });
+    var headers = keys.map(fieldLabel);
+    var rows = filteredData.map(function(m) {
+        var row = {};
+        keys.forEach(function(h, i) {
+            var v = m[h];
+            if (h === 'pct_2024_locales' || h === 'pct_2024_federales' || h === 'pct_2025') {
+                var p = pctValue(v);
+                v = (p === null) ? '' : Math.round(p * 100) / 100;   // todo en % reales
+            }
+            row[headers[i]] = (v === null || v === undefined) ? '' : v;
+        });
+        return row;
+    });
+
+    // CSV: SIEMPRE se genera. text/csv SÍ está en la lista blanca de tipos
+    // compartibles de Android/Chromium (el .xlsx NO), así que sirve de respaldo
+    // para "Compartir por WhatsApp" en Android. Se abre en Excel/Sheets/Numbers.
+    var csvRows = [];
+    // Delimitador ';' (punto y coma): Excel de escritorio en configuración regional
+    // española/mexicana usa ';' como separador de lista. Con ',' Excel en español NO
+    // parte las columnas y junta toda la fila en una sola celda (el "pierde el formato").
+    // Google Sheets y Numbers detectan el delimitador automáticamente, así que ';'
+    // funciona en los tres. Todo campo de texto va entrecomillado, así que un ';'
+    // interno queda protegido.
+    csvRows.push(headers.map(function(h) { return '"' + String(h).replace(/"/g, '""') + '"'; }).join(';'));
+    rows.forEach(function(row) {
+        csvRows.push(headers.map(function(h) {
+            var v = row[h];
+            if (v === '' || v === null || v === undefined) return '';
+            if (typeof v === 'number') return String(v);
+            return '"' + String(v).replace(/"/g, '""') + '"';
+        }).join(';'));
+    });
+    // MIME "pelado" text/csv (SIN ;charset): Chromium compara el tipo EXACTO contra su
+    // lista blanca de tipos compartibles; con el parámetro charset la comparación falla
+    // y Android no deja compartir. El BOM (\uFEFF) hace que Excel muestre bien los acentos
+    // y respete el ';' como separador de columnas.
+    var csvBlob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv' });
+
+    // Archivo principal en memoria (Blob). Se prefiere .xlsx para descargar (si la
+    // librería cargó); si no hay conexión al CDN, el CSV también descarga bien.
+    var filename, blob;
+    if (typeof XLSX !== 'undefined') {
+        var ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        // Ancho de columnas acorde al contenido (legibilidad al abrir en PC).
+        var widths = headers.map(function(h) {
+            var max = String(h).length;
+            for (var r = 0; r < rows.length; r++) {
+                var val = rows[r][h];
+                if (val === null || val === undefined) continue;
+                var len = String(val).length;
+                if (len > max) max = len;
+            }
+            // 'Secciones (detalle)' puede ser larguísimo: se acota para no desbordar.
+            return { wch: Math.min(Math.max(max + 2, 10), 60) };
+        });
+        ws['!cols'] = widths;
+        // Congela la fila de encabezados y habilita filtro (metadata pura, sin estilos).
+        ws['!freeze'] = { ySplit: '1' };
+        ws['!autofilter'] = { ref: ws['!ref'] };
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Municipios');
+        var ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        filename = filenameBase + '.xlsx';
+        blob = new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    } else {
+        filename = filenameBase + '.csv';   // sin conexión al CDN de XLSX
+        blob = csvBlob;
+    }
+    openExportSheet(blob, filename, filteredData.length, csvBlob);
+}
+
+// Botón original (drawer de filtros): exporta lo filtrado.
+document.getElementById('export-excel-btn').addEventListener('click', function() {
+    buildAndOpenExport('municipios_filtrados');
+});
+
+// Coordinador: su botón de filtros abre el MISMO menú de exportar
+// (descargar, compartir .xlsx, compartir .csv por WhatsApp), pero con
+// sus municipios y nombre de archivo propio.
+function coordinadorExportDirecto() {
+    var user = (typeof fortaGetSession === 'function' && fortaGetSession()) ? fortaGetSession().usuario : 'zona';
+    buildAndOpenExport('municipios_' + String(user).replace(/[^a-z0-9]+/gi, '_'));
+}
+
+// Abre el menú Exportar: descargar o compartir por WhatsApp (móvil)
+function openExportSheet(blob, filename, count, csvBlob) {
+    var ov = document.getElementById('export-sheet-overlay');
+    if (!ov) { downloadBlob(blob, filename); return; }   // respaldo si no hay menú
+    // Detectamos el sistema para los mensajes (NO para decidir si se puede: eso
+    // lo decide navigator.canShare con cada archivo en concreto).
+    var ua = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    var xlsxFile = null, csvFile = null;
+    try { xlsxFile = new File([blob], filename, { type: blob.type }); } catch (e) { xlsxFile = null; }
+    try {
+        if (csvBlob) {
+            var csvName = filename.replace(/\.xlsx$/i, '') + '.csv';
+            // Tipo exacto text/csv para que Chromium lo acepte en su lista blanca.
+            csvFile = new File([csvBlob], csvName, { type: 'text/csv' });
+        }
+    } catch (e) { csvFile = null; }
+
+    function canShare(f) {
+        try { return !!(window.navigator.share && f && window.navigator.canShare && window.navigator.canShare({ files: [f] })); }
+        catch (e) { return false; }
+    }
+    var xOk = canShare(xlsxFile);   // iPhone: sí · Android: no (.xlsx fuera de la lista blanca)
+    var cOk = canShare(csvFile);    // iPhone y Android: sí (text/csv está permitido)
+
+    var xBtn = document.getElementById('export-share-xlsx-btn');
+    var cBtn = document.getElementById('export-share-csv-btn');
+    var hint = document.getElementById('export-share-hint');
+    var num = document.getElementById('export-sheet-num');
+    if (num) num.textContent = count + (count === 1 ? ' municipio listo' : ' municipios listos') + ' · ' + filename;
+
+    // Cada botón de compartir solo aparece si ESE formato concreto se puede enviar.
+    if (xBtn) {
+        xBtn.style.display = xOk ? '' : 'none';
+        xBtn.onclick = function() { shareExport(xlsxFile, csvFile); };
+        var xs = document.getElementById('export-xlsx-sub');
+        if (xs) xs.textContent = isIOS ? 'Recomendado en iPhone · formato original del panel'
+                                       : 'Formato original · en Android puede no estar disponible';
+    }
+    if (cBtn) {
+        cBtn.style.display = cOk ? '' : 'none';
+        cBtn.onclick = function() { shareExport(csvFile, null); };
+        var cs = document.getElementById('export-csv-sub');
+        if (cs) cs.textContent = isAndroid ? 'Recomendado en Android · abre en Excel, Sheets o Numbers'
+                                           : 'Compatible con WhatsApp en cualquier teléfono';
+    }
+
+    // Aviso según lo que el navegador permita.
+    if (hint) {
+        if (!xOk && !cOk) {
+            hint.style.display = '';
+            hint.textContent = 'Tu navegador no permite compartir archivos desde la web. Usa "Descargar" y adjunta el archivo desde WhatsApp.';
+        } else if (isAndroid && !xOk) {
+            hint.style.display = '';
+            hint.textContent = 'En Android, WhatsApp recibe el CSV (se abre igual en Excel). El Excel (.xlsx) solo se puede Descargar.';
+        } else {
+            hint.style.display = 'none';
+        }
+    }
+
+    var dl = document.getElementById('export-download-btn');
+    if (dl) dl.onclick = function() { closeExportSheet(); downloadBlob(blob, filename); };
+
+    ov.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch (e) {}
+}
+function closeExportSheet() {
+    var ov = document.getElementById('export-sheet-overlay');
+    if (ov) ov.classList.remove('open');
+    document.body.style.overflow = '';
+}
+// Comparte un archivo por el menú nativo (WhatsApp, etc.). Si el sistema rechaza
+// el tipo (Android/Chromium bloquea .xlsx), descarga el archivo como respaldo
+// para que el usuario lo adjunte a mano desde WhatsApp.
+function shareExport(file, fallbackFile) {
+    if (!window.navigator.share) {
+        if (file) downloadBlob(file, file.name);
+        return;
+    }
+    function doShare(f, fb) {
+        return window.navigator.share({ files: [f], title: 'Panel FORTA', text: 'Municipios del panel' })
+            .then(function() { closeExportSheet(); })
+            .catch(function(err) {
+                if (err && err.name === 'AbortError') return;   // el usuario canceló
+                if (fb) { doShare(fb, null); }                  // reintenta con el otro formato
+                else {
+                    // No se pudo compartir: descargamos y avisamos.
+                    closeExportSheet();
+                    downloadBlob(file, file.name);
+                    alert('No se pudo abrir el menú para compartir en este navegador.\n\nSe descargó el archivo "' + file.name + '".\nÁbrelo y adjúntalo desde WhatsApp.');
+                }
+            });
+    }
+    doShare(file, fallbackFile);
+}
+// Fuerza la descarga del archivo generado
+function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+// ===== INICIALIZACION =====
+// (el document click handler se registra dentro de cada multi-select para evitar
+//  que cierre el menú al interactuar dentro del mismo)
+(function() {
+    // Sesión: pinta usuario/rol, botón salir y permisos por rol.
+    // El guardia auth.js ya redirigió al login si no hay sesión.
+    var fortaSession = null;
+    try {
+        fortaSession = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+        if (fortaSession) {
+            fortaScope = Array.isArray(fortaSession.municipios) ? fortaSession.municipios : null;
+            var nameEl = document.getElementById('user-chip-name');
+            var rolEl = document.getElementById('user-chip-rol');
+            if (nameEl) {
+                var fullName = fortaSession.nombre || fortaSession.usuario || '';
+                nameEl.textContent = fullName;
+                // La barra compacta trunca el nombre: el title conserva el valor completo.
+                nameEl.title = fullName;
+            }
+            if (rolEl) rolEl.textContent = fortaSession.rol || '';
+            var exitBtn = document.getElementById('logout-btn');
+            if (exitBtn) exitBtn.addEventListener('click', function() { fortaLogout(); });
+            // Badge municipios.json: SOLO admins (oculto por defecto en HTML).
+            var srcBadge = document.querySelector('.data-source-badge');
+            if (srcBadge) srcBadge.style.display = (fortaSession.rol === 'admin') ? 'inline-flex' : 'none';
+            // Rol consulta: sin exportar (se oculta el botón del drawer).
+            if (typeof fortaCanExport === 'function' && !fortaCanExport(fortaSession.rol)) {
+                var expBtn = document.getElementById('export-excel-btn');
+                if (expBtn) expBtn.style.display = 'none';
+            }
+            // Rol coordinador: su boton de filtros se vuelve EXPORTAR.
+            // Abre el MISMO menú de exportar (descargar + WhatsApp).
+            // Oculta el drawer de filtros y el boton exportar del drawer.
+            var isCoord = (typeof fortaIsCoordinador === 'function') && fortaIsCoordinador(fortaSession);
+            // Coordinador: solo la barra de busqueda general. Se oculta el
+            // buscador de nombres (municipios o personas) COMPLETO: la caja y
+            // su input, para que no quede un campo de busqueda inutilizable.
+            if (isCoord) {
+                fortaSoloBusquedaGeneral = true;
+                var nameBox = document.getElementById('person-search-box');
+                if (nameBox) nameBox.style.display = 'none';
+                var nameInput = document.getElementById('person-search');
+                if (nameInput) {
+                    nameInput.value = '';
+                    nameInput.disabled = true;
+                    nameInput.setAttribute('aria-hidden', 'true');
+                }
+                personSearchTerm = '';
+                // El buscador general queda acotado a sus municipios: se avisa
+                // en el placeholder para que quede claro el alcance.
+                var generalInput = document.getElementById('table-search');
+                if (generalInput) {
+                    generalInput.placeholder = 'Buscar en mis municipios...';
+                    generalInput.title = 'Busca en los municipios de tu zona';
+                }
+            }
+            var toggle = document.getElementById('menu-toggle');
+            if (isCoord && toggle) {
+                toggle.innerHTML = '<i data-lucide="file-down"></i><span>Exportar Excel</span>';
+                toggle.setAttribute('aria-label', 'Exportar mis municipios a Excel');
+                toggle.setAttribute('title', 'Exporta tus municipios (descargar o WhatsApp)');
+                try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch (e2) {}
+                var badge = document.getElementById('menu-badge');
+                if (badge) badge.style.display = 'none';
+                // Marca el botón para que el handler del drawer lo ignore
+                // (si no, el clic abriría/cerraría el drawer oculto en vez de exportar).
+                toggle.setAttribute('data-coord-export', '1');
+                toggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    coordinadorExportDirecto();
+                });
+                // Sin drawer para el coordinador: no hay filtros que abrir.
+                var sb = document.getElementById('filters-sidebar');
+                if (sb) sb.style.display = 'none';
+                var bd = document.getElementById('drawer-backdrop');
+                if (bd) bd.style.display = 'none';
+                var expInDrawer = document.getElementById('export-excel-btn');
+                if (expInDrawer) expInDrawer.style.display = 'none';
+            }
+            // Expone si es coordinador para que el drawer no robe el clic.
+            window.__fortaIsCoord = isCoord;
+        }
+    } catch (e) { console.error('session UI:', e); }
+    // Drawer de filtros: abre/cierra el cajon lateral
+    var sidebar = document.getElementById('filters-sidebar');
+    var toggle = document.getElementById('menu-toggle');
+    var backdrop = document.getElementById('drawer-backdrop');
+    var closeBtn = document.getElementById('drawer-close');
+
+    function openDrawer() {
+        sidebar.classList.add('open');
+        backdrop.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+    function closeDrawer() {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+
+    if (sidebar && toggle && backdrop) {
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Coordinador: su botón es EXPORTAR, no filtros. El otro handler
+            // ya abrió el menú; aquí no se toca el drawer.
+            if (toggle.getAttribute('data-coord-export') === '1') return;
+            if (sidebar.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
+        });
+        closeBtn.addEventListener('click', closeDrawer);
+        backdrop.addEventListener('click', closeDrawer);
+        // Cerrar al seleccionar filtros (toque outside en movil)
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && sidebar.classList.contains('open')) closeDrawer();
+        });
+    }
+    // Cargar datos (Firestore con fallback automático a local)
+    // Obtener sesión y configurar fortaScope ANTES de cargar datos
+    // para que el filtrado por municipios del coordinador funcione
+    var fortaSessionInit = null;
+    try {
+        fortaSessionInit = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+        if (fortaSessionInit) {
+            fortaScope = Array.isArray(fortaSessionInit.municipios) ? fortaSessionInit.municipios : null;
+        }
+    } catch (e) { console.error('session init:', e); }
+
+    if (window.initFirebasePromise) {
+        window.initFirebasePromise.then(function() {
+            loadData().catch(function(e) { console.error('loadData error:', e); });
+        }).catch(function() {
+            loadData().catch(function(e) { console.error('loadData error:', e); });
+        });
+    } else {
+        loadData().catch(function(e) { console.error('loadData error:', e); });
+    }
+    try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
+})();
+

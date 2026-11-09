@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma Forta</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.475.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="styles.css?v=11">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%8F%9B%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <button class="filter-btn" id="menu-toggle" aria-label="Mostrar u ocultar filtros" aria-expanded="false" title="Filtros">
+                <i data-lucide="sliders-horizontal"></i>
+                <span>Filtros</span>
+                <span class="filter-count" id="menu-badge">0</span>
+            </button>
+            <div class="top-bar__left">
+                <i data-lucide="shield-check" class="top-bar__brand-icon"></i>
+                <h2>Plataforma Forta</h2>
+            </div>
+            <div class="top-bar__user" id="user-chip" title="Sesión activa">
+                <i data-lucide="circle-user-round" class="user-chip__avatar"></i>
+                <span id="user-chip-name" title="Usuario">Usuario</span>
+                <span class="user-chip__rol" id="user-chip-rol">rol</span>
+                <button class="user-chip__exit" id="logout-btn" title="Cerrar sesión">
+                    <i data-lucide="log-out" class="user-chip__exit-icon"></i><span>Salir</span>
+                </button>
+            </div>
+            <div class="data-source-badge" style="display:none">
+                <i data-lucide="database"></i> municipios.json
+            </div>
+        </header>
+
+                <div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+        <aside class="sidebar" id="filters-sidebar">
+            <div class="sidebar-inner">
+            <div class="sidebar-header">
+                <i data-lucide="filter" style="width:18px;height:18px;color:var(--accent)"></i>
+                <h1>Filtros</h1>
+                <button class="drawer-close" id="drawer-close" aria-label="Cerrar filtros">
+                    <span class="drawer-close-x">✕</span>
+                </button>
+            </div>
+
+            <!-- Ayuda rápida -->
+            <div class="filter-help">
+                <i data-lucide="info" style="width:14px;height:14px"></i>
+                <span>Selecciona uno o varios valores para filtrar. Los cambios se aplican automáticamente.</span>
+            </div>
+
+            <div class="filter-divider"></div>
+
+            <div class="filter-group">
+                <h4>Distrito Local</h4>
+                <div class="multi-select" id="filter-distrito-local">
+                    <div class="multi-select__trigger" data-placeholder="E.g. 01 PÁNUCO">
+                        <span class="placeholder">Seleccionar...</span>
+                        <span class="selected-count">0</span>
+                        <i data-lucide="chevron-down" class="trigger-chevron" style="width:14px;height:14px;color:var(--text-secondary)"></i>
+                    </div>
+                    <div class="multi-select__options">
+                        <input type="text" placeholder="Buscar distritos..." class="option-search">
+                        <div class="options-list"></div>
+                    </div>
+                    <div class="tags-container"></div>
+                </div>
+                <div class="filter-desc">Filtra por distrito local</div>
+            </div>
+
+            <div class="filter-divider"></div>
+
+            <div class="filter-group">
+                <h4>Distrito Federal</h4>
+                <div class="multi-select" id="filter-distrito-federal">
+                    <div class="multi-select__trigger" data-placeholder="E.g. 02 ÁLAMO INDIGENA">
+                        <span class="placeholder">Seleccionar...</span>
+                        <span class="selected-count">0</span>
+                        <i data-lucide="chevron-down" class="trigger-chevron" style="width:14px;height:14px;color:var(--text-secondary)"></i>
+                    </div>
+                    <div class="multi-select__options">
+                        <input type="text" placeholder="Buscar distritos..." class="option-search">
+                        <div class="options-list"></div>
+                    </div>
+                    <div class="tags-container"></div>
+                </div>
+                <div class="filter-desc">Filtra por distrito federal</div>
+            </div>
+
+                        <div class="filter-divider"></div>
+
+            <div class="filter-group">
+                <h4>Estatus de Estructura</h4>
+                <div class="multi-select" id="filter-estatus">
+                    <div class="multi-select__trigger" data-placeholder="Ej. Comité, Delegación, Comisión">
+                        <span class="placeholder">Seleccionar...</span>
+                        <span class="selected-count">0</span>
+                        <i data-lucide="chevron-down" class="trigger-chevron" style="width:14px;height:14px;color:var(--text-secondary)"></i>
+                    </div>
+                    <div class="multi-select__options">
+                        <input type="text" placeholder="Buscar estatus..." class="option-search">
+                        <div class="options-list"></div>
+                    </div>
+                    <div class="tags-container"></div>
+                </div>
+                <div class="filter-desc">Filtra por estatus: Comité Directivo, Delegación, Comisión Organizadora o <strong>Sin estructura</strong>.</div>
+            </div>
+
+                        <div class="filter-divider"></div>
+
+            <div class="filter-group">
+                <h4>Coordinador de zona</h4>
+                <div class="multi-select" id="filter-coordinador">
+                    <div class="multi-select__trigger" data-placeholder="Ej. Carlos Mejia">
+                        <span class="placeholder">Seleccionar...</span>
+                        <span class="selected-count">0</span>
+                        <i data-lucide="chevron-down" class="trigger-chevron" style="width:14px;height:14px;color:var(--text-secondary)"></i>
+                    </div>
+                    <div class="multi-select__options">
+                        <input type="text" placeholder="Buscar coordinador..." class="option-search">
+                        <div class="options-list"></div>
+                    </div>
+                    <div class="tags-container"></div>
+                </div>
+                <div class="filter-desc">Filtra por coordinador de zona (incluye municipios compartidos adicionales)</div>
+            </div>
+
+                        <div class="filter-divider"></div>
+
+            <button class="clear-filters-btn" id="clear-all-filters" style="display:none;">
+                <i data-lucide="trash-2" style="width:16px;height:16px;"></i> Limpiar todos los filtros
+            </button>
+
+            <div class="filter-divider"></div>
+
+            <button class="drawer-export-btn" id="export-excel-btn">
+                <i data-lucide="sheet" style="width:16px;height:16px;"></i> Exportar a Excel
+            </button>
+            <div class="filter-desc" style="justify-content:center;text-align:center;">Exporta los municipios que cumplan los filtros y la búsqueda actuales</div>
+
+            </div><!-- /sidebar-inner -->
+        </aside>
+
+        <main class="main-content">
+            <div class="active-filters-bar" id="active-filters-bar"></div>
+
+            <div class="list-search-bar">
+                <div class="search-box">
+                    <input type="text" id="table-search" placeholder="Búsqueda general...">
+                    <i data-lucide="search" style="width:16px;height:16px;"></i>
+                </div>
+                <div class="search-box" id="person-search-box">
+                    <input type="text" id="person-search" placeholder="Municipios o personas...">
+                    <i data-lucide="user-search" style="width:16px;height:16px;"></i>
+                </div>
+            </div>
+
+                        <div class="muni-list" id="muni-list"></div>
+            <div class="load-more-wrap">
+                <button id="load-more-btn" style="display:none;">
+                    <i data-lucide="chevrons-down" style="width:14px;height:14px;"></i> Mostrar más municipios
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista de detalle (overlay) -->
+    <div class="detail-overlay" id="detail-overlay">
+        <div class="detail-sheet">
+            <div class="detail-close-row">
+                <button class="detail-close" id="detail-close" aria-label="Cerrar detalle">
+                    <i data-lucide="x" style="width:15px;height:15px;"></i> <span>Cerrar</span>
+                </button>
+            </div>
+            <div class="detail-panel" id="detail-panel">
+                <div id="detail-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Marcar / WhatsApp al tocar un numero -->
+    <div class="call-sheet-overlay" id="call-sheet-overlay">
+        <div class="call-sheet" role="dialog" aria-label="Opciones de contacto">
+            <div class="call-sheet__handle"></div>
+            <div class="call-sheet__name" id="call-sheet-name">Contacto</div>
+            <div class="call-sheet__num" id="call-sheet-num">Número</div>
+            <a class="call-opt tel" id="call-sheet-tel" href="#"><i data-lucide="phone-call"></i><span>Marcar<small>Llama ahora a este número</small></span></a>
+            <a class="call-opt wa" id="call-sheet-wa" href="#" target="_blank" rel="noopener"><i data-lucide="message-circle"></i><span>WhatsApp<small>Abre el chat con este número</small></span></a>
+            <button class="call-sheet__cancel" id="call-sheet-cancel">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Menu Exportar: descargar o compartir por WhatsApp -->
+    <div class="call-sheet-overlay" id="export-sheet-overlay">
+        <div class="call-sheet" role="dialog" aria-label="Opciones de exportación">
+            <div class="call-sheet__handle"></div>
+            <div class="call-sheet__name">Exportar municipios</div>
+            <div class="call-sheet__num" id="export-sheet-num">Listos para exportar</div>
+            <button type="button" class="call-opt wa" id="export-share-xlsx-btn"><i data-lucide="file-spreadsheet"></i><span>Compartir Excel (.xlsx)<small id="export-xlsx-sub">Formato original del panel</small></span></button>
+            <button type="button" class="call-opt wa" id="export-share-csv-btn"><i data-lucide="file-text"></i><span>Compartir CSV<small id="export-csv-sub">Abre en Excel/Sheets/Numbers · para WhatsApp en cualquier teléfono</small></span></button>
+            <button type="button" class="call-opt dl" id="export-download-btn"><i data-lucide="download"></i><span>Descargar<small>Guarda el archivo en tu teléfono</small></span></button>
+            <div class="call-sheet__num" id="export-share-hint" style="display:none;">Compartir solo está disponible en el teléfono. Aquí se descargará y podrás adjuntarlo desde WhatsApp.</div>
+            <button class="call-sheet__cancel" id="export-sheet-cancel">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Datos: se cargan desde Firestore (colección "municipios").
+         Requiere Firebase configurado en firebase-config.js.
+         auth.js (sin defer) exige sesión válida antes de mostrar el panel. -->
+    <script src="firebase-config.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="auth.js"></script>
+    <script src="dashboard.js" defer></script>
+    <script>
+        // Forzar renderizado de iconos Lucide después de cargar todo
+        if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
