@@ -66,8 +66,18 @@ function toDateISO(v) {
     if (v instanceof Date) {
         return v.toISOString().split('T')[0];
     }
-    if (typeof v === 'number') {
-        const ms = (v - 25569) * 86400 * 1000;
+    const num = (typeof v === 'number') ? v : (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim()) ? Number(v.trim()) : null);
+    if (num !== null && !isNaN(num) && num > 1000 && num < 100000) {
+        if (typeof XLSX !== 'undefined' && XLSX.SSF && XLSX.SSF.parse_date_code) {
+            const p = XLSX.SSF.parse_date_code(num);
+            if (p) {
+                const y = String(p.y).padStart(4, '0');
+                const m = String(p.m).padStart(2, '0');
+                const d = String(p.d).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+        }
+        const ms = Math.round((num - 25569) * 86400 * 1000);
         return new Date(ms).toISOString().split('T')[0];
     }
     const s = String(v).trim();
@@ -107,7 +117,7 @@ function buildMunicipioDoc(row) {
     m.estatus_estructura = trimStr(row[27]);
     m.soldados = toNum(row[28]);
     m.meta_afiliados = toNum(row[29]);
-    m.vigencia = trimStr(row[30]);
+    m.vigencia = toDateISO(row[30]);
     m.financiamento = trimStr(row[31]);
     m.ejercicio = trimStr(row[32]);
     m.presidente_estructura = trimStr(row[33]);

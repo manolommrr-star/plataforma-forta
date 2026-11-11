@@ -497,6 +497,68 @@ function formatPct(v) {
     return (Math.round(p * 100) / 100).toLocaleString('es-MX') + '%';
 }
 
+// Formatea fechas con guiones DD-MM-YYYY (ej. 09-10-2028).
+// Tolera fechas ISO (YYYY-MM-DD), números seriales de Excel (ej. 47035),
+// fechas con diagonales (DD/MM/YYYY) y objetos Date.
+function formatDate(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (v instanceof Date && !isNaN(v.getTime())) {
+        var dy = (v.getUTCDate() < 10 ? '0' : '') + v.getUTCDate();
+        var dm = (v.getUTCMonth() + 1 < 10 ? '0' : '') + (v.getUTCMonth() + 1);
+        return dy + '-' + dm + '-' + v.getUTCFullYear();
+    }
+    var s = String(v).trim();
+    if (!s) return '';
+
+    // Si viene como número serial de Excel (ej. 47035 o "47035")
+    var num = Number(s);
+    if (!isNaN(num) && num > 1000 && num < 100000) {
+        if (typeof XLSX !== 'undefined' && XLSX.SSF && XLSX.SSF.parse_date_code) {
+            var p = XLSX.SSF.parse_date_code(num);
+            if (p) {
+                var pd = (p.d < 10 ? '0' : '') + p.d;
+                var pm = (p.m < 10 ? '0' : '') + p.m;
+                return pd + '-' + pm + '-' + p.y;
+            }
+        }
+        var ms = Math.round((num - 25569) * 86400 * 1000);
+        var dt = new Date(ms);
+        if (!isNaN(dt.getTime())) {
+            var sdy = (dt.getUTCDate() < 10 ? '0' : '') + dt.getUTCDate();
+            var sdm = (dt.getUTCMonth() + 1 < 10 ? '0' : '') + (dt.getUTCMonth() + 1);
+            return sdy + '-' + sdm + '-' + dt.getUTCFullYear();
+        }
+    }
+
+    // Si viene en formato ISO YYYY-MM-DD -> DD-MM-YYYY con guiones
+    var isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+        var iy = isoMatch[1];
+        var im = (isoMatch[2].length < 2 ? '0' : '') + isoMatch[2];
+        var id = (isoMatch[3].length < 2 ? '0' : '') + isoMatch[3];
+        return id + '-' + im + '-' + iy;
+    }
+
+    // Si ya viene con guiones DD-MM-YYYY
+    var dashMatch = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (dashMatch) {
+        var dd = (dashMatch[1].length < 2 ? '0' : '') + dashMatch[1];
+        var dm2 = (dashMatch[2].length < 2 ? '0' : '') + dashMatch[2];
+        return dd + '-' + dm2 + '-' + dashMatch[3];
+    }
+
+    // Si viene con diagonales DD/MM/YYYY
+    var slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (slashMatch) {
+        var sd = (slashMatch[1].length < 2 ? '0' : '') + slashMatch[1];
+        var sm = (slashMatch[2].length < 2 ? '0' : '') + slashMatch[2];
+        var sy = slashMatch[3].length === 2 ? ('20' + slashMatch[3]) : slashMatch[3];
+        return sd + '-' + sm + '-' + sy;
+    }
+
+    return s;
+}
+
 // Etiquetas legibles para la exportación y para el bloque "Otros datos"
 var FIELD_LABELS = {
     'numero de municipio': 'N.º de municipio',
@@ -940,7 +1002,8 @@ function openDetail(id, municipioObj) {
     html += detailItem('Meta soldados dic (2026)', formatNum(m.soldados), 'big');
     html += detailItem('Meta afiliados dic (2026)', formatNum(m.meta_afiliados), 'big');
     html += detailItem('Estatus de estructura', est ? estatusShort(est) + ' · ' + est : '', est ? '' : 'dim', true);
-    html += detailItem('Vigencia de la estructura', m.vigencia || '', m.vigencia ? '' : 'dim', true);
+    var vigenciaFmt = formatDate(m.vigencia);
+    html += detailItem('Vigencia de la estructura', vigenciaFmt || '', vigenciaFmt ? '' : 'dim', true);
     html += '</div></div>';
 
     // La seccion "Resultados electorales" (votos/% del Excel del Panel) se quito
@@ -1265,6 +1328,8 @@ function buildAndOpenExport(filenameBase) {
             if (h === 'pct_2024_locales' || h === 'pct_2024_federales' || h === 'pct_2025') {
                 var p = pctValue(v);
                 v = (p === null) ? '' : Math.round(p * 100) / 100;   // todo en % reales
+            } else if (h === 'vigencia' || h === 'secretario_fecha_nacimiento' || h === 'presidente_fecha_nacimiento') {
+                v = formatDate(v);
             }
             row[headers[i]] = (v === null || v === undefined) ? '' : v;
         });
