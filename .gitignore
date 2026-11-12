@@ -10,9 +10,8 @@ node_modules/
 npm-debug.log*
 package-lock.json
 # Archivos nuevos - NO subir
-Panel FORTA 09-10-2026.xlsx
-Panel FORTA 2 03-11-2026.xlsx
-~$Panel FORTA 2 03-11-2026.xlsx
+Panel FORTA*.xlsx
+~$Panel FORTA*.xlsx
 actualizar_numero_municipio.js
 check_firebase.js
 plataforma-firebase-adminsdk-fbsvc-e5930839dc.json
