@@ -24,6 +24,7 @@ const EXCEL_PATH = path.join(__dirname, 'Panel FORTA 2 03-11-2026.xlsx');
 const SHEET_NAME = 'Panel';
 const FIRESTORE_COLLECTION = 'municipios';
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, 'serviceAccountKey.json');
+const MUNICIPIOS_JSON_PATH = path.join(__dirname, 'data', 'municipios.json');
 
 function initFirebase() {
     try {
@@ -85,8 +86,23 @@ function toDateISO(v) {
     return s;
 }
 
-function buildMunicipioDoc(row) {
+function buildMunicipioDoc(row, jsonMatch) {
     const m = {};
+
+    // Mantener estructura base de datos (votaciones por partido, localidades con clave de sección, etc.)
+    if (jsonMatch) {
+        if (jsonMatch.secciones_detalle) m.secciones_detalle = jsonMatch.secciones_detalle;
+        if (jsonMatch.votos_partidos) m.votos_partidos = jsonMatch.votos_partidos;
+        if (jsonMatch.pct_2025 != null) m.pct_2025 = jsonMatch.pct_2025;
+        m.metricas = jsonMatch.metricas || {};
+        m.etiquetas = jsonMatch.etiquetas || [];
+        m.metadata = jsonMatch.metadata || {};
+    } else {
+        m.metricas = {};
+        m.etiquetas = [];
+        m.metadata = {};
+    }
+
     m.zona = trimStr(row[0]);
     m.coordinador_zona = trimStr(row[1]);
     m.prioridad = trimStr(row[2]);
@@ -157,6 +173,22 @@ async function main() {
     const dataRows = rows.slice(2);
     console.log('📊 Filas de datos encontradas:', dataRows.length);
 
+    // Cargar estructura base (votaciones por partido, localidades con clave de sección, etc.)
+    const baseByNum = new Map();
+    const baseByName = new Map();
+    if (fs.existsSync(MUNICIPIOS_JSON_PATH)) {
+        try {
+            const baseJson = JSON.parse(fs.readFileSync(MUNICIPIOS_JSON_PATH, 'utf8'));
+            baseJson.forEach(item => {
+                if (item['numero de municipio'] != null) baseByNum.set(item['numero de municipio'], item);
+                if (item.municipio) baseByName.set(String(item.municipio).trim().toUpperCase(), item);
+            });
+            console.log(`📦 Datos base cargados de municipios.json (${baseJson.length} municipios)`);
+        } catch (e) {
+            console.warn('⚠️  No se pudo leer municipios.json:', e.message);
+        }
+    }
+
     let subidos = 0;
     let errores = 0;
     const fallos = [];
@@ -179,7 +211,8 @@ async function main() {
         }
 
         try {
-            const docData = buildMunicipioDoc(row);
+            const jsonMatch = (numMuni != null ? baseByNum.get(numMuni) : null) || baseByName.get(nombreMuni.toUpperCase());
+            const docData = buildMunicipioDoc(row, jsonMatch);
             const docId = nombreMuni;
             const docRef = db.collection(FIRESTORE_COLLECTION).doc(docId);
 
