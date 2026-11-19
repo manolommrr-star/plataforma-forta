@@ -58,17 +58,11 @@ jobs:
       - name: Verificar public/firebase-config.js generado
         run: cat public/firebase-config.js
 
-      - name: Preparar carpeta de despliegue (sin data/users)
-        run: |
-          rm -rf _deploy
-          mkdir -p _deploy
-          rsync -av --exclude='data' --exclude='users' --exclude='.git' --exclude='.github' . _deploy/
-
-      # Subir SOLO la raíz (sin data/ ni users/) — scripts/ y archivos de raíz nunca se despliegan
-      - name: Subir a GitHub Pages
+      # Subir SOLO la carpeta public/ — scripts/ y archivos de raíz nunca se despliegan
+      - name: Subir public/ a GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '_deploy'
+          path: 'public'
 
       - name: Desplegar en GitHub Pages
         id: deployment
