@@ -4,7 +4,7 @@ plataforma-firebase-adminsdk-*.json
 public/firebase-config.js
 
 # ── Datos locales (información sensible o generada, no se versiona) ─────────
-public/data/
+data/
 data/
 
 # ── Excels fuente (archivos de trabajo, solo locales) ──────────────────────
@@ -24,8 +24,8 @@ package-lock.json
 actualizar_numero_municipio.js
 check_firebase.js
 
-public/data/
-public/users/
+data/
+users/
 
 scripts/
 *.xlsx
@@ -34,5 +34,5 @@ README.md
 package*.json
 serviceAccountKey.json
 src/
-public/data/
-public/users/
+data/
+users/
