@@ -1,0 +1,28 @@
+# ── Credenciales Firebase (NUNCA subir) ────────────────────────────────────
+serviceAccountKey.json
+plataforma-firebase-adminsdk-*.json
+public/firebase-config.js
+
+# ── Datos locales (información sensible o generada, no se versiona) ─────────
+public/data/
+data/
+
+# ── Excels fuente (archivos de trabajo, solo locales) ──────────────────────
+scripts/raw/
+Panel FORTA*.xlsx
+~$Panel FORTA*.xlsx
+
+# ── Reglas Firebase ─────────────────────────────────────────────────────────
+firebase-rules.rules
+
+# ── Node.js ─────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# ── Scripts de un solo uso (ya reemplazados o integrados) ──────────────────
+actualizar_numero_municipio.js
+check_firebase.js
+
+public/data/
+public/users/
