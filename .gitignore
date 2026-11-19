@@ -36,3 +36,4 @@ serviceAccountKey.json
 src/
 data/
 users/
+node_modules
