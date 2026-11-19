@@ -26,3 +26,13 @@ check_firebase.js
 
 public/data/
 public/users/
+
+scripts/
+*.xlsx
+*.pdf
+README.md
+package*.json
+serviceAccountKey.json
+src/
+public/data/
+public/users/
