@@ -3,37 +3,25 @@ serviceAccountKey.json
 plataforma-firebase-adminsdk-*.json
 public/firebase-config.js
 
-# ── Datos locales (información sensible o generada, no se versiona) ─────────
+# ── Datos locales e información generada ───────────────────────────────────
 data/
-data/
+users/
 
-# ── Excels fuente (archivos de trabajo, solo locales) ──────────────────────
+# ── Archivos Excel fuente y de trabajo ─────────────────────────────────────
 scripts/raw/
-Panel FORTA*.xlsx
-~$Panel FORTA*.xlsx
+src/
+*.xlsx
+~$*.xlsx
+*.pdf
 
-# ── Reglas Firebase ─────────────────────────────────────────────────────────
+# ── Scripts y utilidades locales ───────────────────────────────────────────
+scripts/
+actualizar_numero_municipio.js
+check_firebase.js
 firebase-rules.rules
 
-# ── Node.js ─────────────────────────────────────────────────────────────────
+# ── Node.js & Dependencias ──────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
 package-lock.json
-
-# ── Scripts de un solo uso (ya reemplazados o integrados) ──────────────────
-actualizar_numero_municipio.js
-check_firebase.js
-
-data/
-users/
-
-scripts/
-*.xlsx
-*.pdf
-README.md
 package*.json
-serviceAccountKey.json
-src/
-data/
-users/
-node_modules

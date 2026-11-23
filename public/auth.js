@@ -36,7 +36,8 @@ function fortaIsCoordinador(session) {
 
 function fortaCanExport(rol) {
     // consulta = solo lectura; todos los demas exportan
-    return rol === 'admin' || rol === 'capturista' || rol === 'coordinador' || rol === 'coordinador_g20';
+    var r = String(rol || '').toLowerCase().trim();
+    return r === 'admin' || r === 'presidenta' || r === 'presidente' || r === 'capturista' || r === 'coordinador' || r === 'coordinador_g20';
 }
 
 function fortaCanManageUsers(rol) {

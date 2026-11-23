@@ -221,6 +221,7 @@ async function loadData() {
     }
 
     initFilters();
+    initFortaComments();
     applyFilters();
 
     // 3. Cargar datos de usuarios para coordinadores (zona + compartidos)
@@ -474,8 +475,34 @@ function applyFilters() {
         if (activeFilters.coordinador.size > 0 && !municipioEnCoordinadoresSeleccionados(m, activeFilters.coordinador)) return false;
         return true;
     });
-    // Orden alfabetico por nombre de municipio
+    // Orden: municipios con comentarios (aprobados o pendientes según rol) primero, luego alfabético
     filteredData.sort(function(a, b) {
+        var numA = a['numero de municipio'];
+        var numB = b['numero de municipio'];
+        var statsA = (typeof getMuniCommentStats === 'function') ? getMuniCommentStats(numA) : { total: 0, pending: 0, newestTimestamp: 0 };
+        var statsB = (typeof getMuniCommentStats === 'function') ? getMuniCommentStats(numB) : { total: 0, pending: 0, newestTimestamp: 0 };
+
+        var hasA = statsA.total > 0 ? 1 : 0;
+        var hasB = statsB.total > 0 ? 1 : 0;
+
+        // Municipios con comentarios van primero
+        if (hasA !== hasB) {
+            return hasB - hasA;
+        }
+
+        // Si ambos tienen comentarios:
+        if (hasA && hasB) {
+            // Priorizar pendientes para administradores
+            if (statsA.pending !== statsB.pending) {
+                return statsB.pending - statsA.pending;
+            }
+            // Luego el más recientemente comentado primero
+            if (statsA.newestTimestamp !== statsB.newestTimestamp) {
+                return statsB.newestTimestamp - statsA.newestTimestamp;
+            }
+        }
+
+        // Orden alfabético secundario por nombre de municipio
         return (a.municipio || '').localeCompare(b.municipio || '', 'es', { sensitivity: 'base' });
     });
         visibleCount = 20;
@@ -786,11 +813,17 @@ function renderList() {
     } else {
         data.slice(0, visibleCount).forEach(function(m) {
             var est = (m.estatus_estructura || '').trim();
+            var muniNum = m['numero de municipio'];
             var card = document.createElement('div');
             card.className = 'muni-card';
+            card.setAttribute('data-muni-num', muniNum);
+
+            var pillHtml = getMuniCardCommentPillHtml(muniNum);
+
             card.innerHTML =
                 '<div class="muni-card__head">' +
                     '<span class="muni-card__name">' + escapeHtml(m.municipio || 'Sin nombre') + '</span>' +
+                    pillHtml +
                     '<span class="muni-card__badge ' + estatusClass(est) + '" title="' + escapeHtml(est || 'Sin estatus de estructura') + '">' + escapeHtml(estatusShort(est)) + '</span>' +
                 '</div>' +
                 '<div class="muni-card__districts">DL: <em>' + escapeHtml(m.distrito_local || '\u2014') + '</em> &nbsp;·&nbsp; DF: <em>' + escapeHtml(m.distrito_federal || '\u2014') + '</em></div>';
@@ -934,7 +967,7 @@ function closeCallSheet() {
     if (ov) ov.classList.remove('open');
 }
 
-function openDetail(id, municipioObj) {
+function openDetail(id, municipioObj, autoOpenComments) {
     var m = municipioObj || allData.find(function(x) {
         return x['numero de municipio'] === id ||
                String(x['numero de municipio']) === String(id) ||
@@ -948,6 +981,7 @@ function openDetail(id, municipioObj) {
     var html = '';
     var jsMun = String(m.municipio || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var muniNum = m['numero de municipio'];
+    window.__fortaActiveMuniNum = muniNum;
     var estBadgeCls = estatusClass(est);
 
     // ── HERO ──
@@ -972,8 +1006,21 @@ function openDetail(id, municipioObj) {
     if (m.coordinador_zona) html += '<span class="hero-chip"><i data-lucide="user-round-cog" style="width:9px;height:9px;"></i>' + escapeHtml(nameCase(m.coordinador_zona)) + '</span>';
     html += '</div>';
 
-    var existingComments = loadComments(muniNum);
-    var cCountLabel = existingComments.length ? ' (' + existingComments.length + ')' : '';
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var userRol = sess ? String(sess.rol || '').toLowerCase().trim() : 'consulta';
+    var allExistingComments = loadComments(muniNum);
+    var visibleComments = allExistingComments.filter(function(c) {
+        return (typeof puedeVerComentario === 'function') ? puedeVerComentario(sess, c) : true;
+    });
+    var isAdminUser = (typeof puedeAprobarComentarios === 'function') && puedeAprobarComentarios(userRol);
+    var pendingAdminCount = isAdminUser ? allExistingComments.filter(function(c) { return c.estado === 'pendiente'; }).length : 0;
+
+    var cCountLabel = '';
+    if (pendingAdminCount > 0) {
+        cCountLabel = ' (' + visibleComments.length + ' · ' + pendingAdminCount + ' pend.)';
+    } else if (visibleComments.length > 0) {
+        cCountLabel = ' (' + visibleComments.length + ')';
+    }
 
     // Barra de acciones: Mapa · Localidades · Comentarios
     html += '<div class="hero-actions">';
@@ -992,12 +1039,26 @@ function openDetail(id, municipioObj) {
     html += renderLocalidadesPanel(muniNum, m.secciones_detalle);
 
     // ── PANEL DE COMENTARIOS (oculto por defecto) ──
+    var canAddComment = (typeof puedeComentar === 'function') ? puedeComentar(userRol, muniNum) : false;
+    var commentInputBlockHtml = '';
+    if (canAddComment) {
+        var placeholderText = (userRol === 'admin' || userRol === 'presidenta' || userRol === 'presidente')
+            ? 'Escribe una nota institucional sobre este municipio…'
+            : 'Escribe un reporte de trabajo (pasará a revisión del administrador)…';
+        commentInputBlockHtml = '<div class="comment-input-row">'
+            + '<textarea id="comment-input-' + muniNum + '" placeholder="' + escapeHtml(placeholderText) + '" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();addComment(' + muniNum + ');}"></textarea>'
+            + '<button type="button" class="comment-send-btn" onclick="addComment(' + muniNum + ')" title="Enviar comentario"><i data-lucide="send"></i></button>'
+            + '</div>';
+    } else {
+        var noticeText = (userRol === 'consulta')
+            ? 'Tu perfil de Consulta tiene acceso de solo lectura para los comentarios.'
+            : 'Este municipio no está asignado a tu zona de trabajo para publicar notas.';
+        commentInputBlockHtml = '<div class="comment-permission-notice"><i data-lucide="shield-alert"></i><span>' + escapeHtml(noticeText) + '</span></div>';
+    }
+
     html += '<div class="comments-panel" id="comments-panel-' + muniNum + '">';
     html += '<div class="comments-panel__title" id="comments-title-' + muniNum + '"><i data-lucide="message-circle"></i>Notas y comentarios' + cCountLabel + '</div>';
-    html += '<div class="comment-input-row">';
-    html += '<textarea id="comment-input-' + muniNum + '" placeholder="Escribe un comentario sobre este municipio…" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();addComment(' + muniNum + ');}"></textarea>';
-    html += '<button type="button" class="comment-send-btn" onclick="addComment(' + muniNum + ')" title="Enviar comentario"><i data-lucide="send"></i></button>';
-    html += '</div>';
+    html += commentInputBlockHtml;
     html += '<div class="comments-list" id="comments-list-' + muniNum + '">';
     html += '<div class="comments-empty">Sin comentarios aún.</div>';
     html += '</div>';
@@ -1176,6 +1237,9 @@ function openDetail(id, municipioObj) {
     document.getElementById('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
     renderCommentsList(m['numero de municipio']);
+    if (autoOpenComments) {
+        toggleComments(m['numero de municipio']);
+    }
     try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
     // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
@@ -1374,6 +1438,7 @@ function verUbicacion(municipio) {
 
 
 function closeDetail() {
+    window.__fortaActiveMuniNum = null;
     document.getElementById('detail-overlay').classList.remove('open');
     document.body.style.overflow = '';
 }
@@ -1766,61 +1831,300 @@ function downloadBlob(blob, filename) {
 
 /* ===================================================================
    COMENTARIOS POR MUNICIPIO
-   Almacenamiento local (localStorage) por defecto.
-   Cuando Firestore esté disponible se puede extender fácilmente.
+   Persistencia en Firebase Firestore (colección 'comentarios')
+   con respaldo y caché local (localStorage) en tiempo real.
    =================================================================== */
 
-// Clave de almacenamiento: por número de municipio
-function _commentsKey(muniNum) { return 'forta_comments_' + muniNum; }
+// Estado global de comentarios
+var fortaCommentsState = {
+    byMuni: {},
+    unsubscribe: null,
+    initialized: false
+};
+
+function _commentsKey(muniNum) {
+    return 'forta_comments_' + muniNum;
+}
+
+// Normaliza un comentario existente o nuevo
+function _normalizeComment(c, defaultMuniId) {
+    if (!c) return null;
+    var now = new Date();
+    var obj = (typeof c === 'string') ? { texto: c } : Object.assign({}, c);
+    if (!obj.id) {
+        obj.id = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    }
+    if (!obj.municipio_id && defaultMuniId) {
+        obj.municipio_id = Number(defaultMuniId);
+    }
+    if (!obj.autor) {
+        obj.autor = obj.usuario || 'Usuario';
+    }
+    if (!obj.fecha) {
+        obj.fecha = now.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+                  + ' ' + now.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+    }
+    if (!obj.timestamp) {
+        obj.timestamp = Date.now();
+    }
+    if (!obj.estado) {
+        obj.estado = 'aprobado';
+    }
+    return obj;
+}
+
+function loadCommentsFromStorage(muniNum) {
+    try {
+        var raw = localStorage.getItem(_commentsKey(muniNum));
+        if (!raw) return [];
+        var list = JSON.parse(raw);
+        if (!Array.isArray(list)) return [];
+        return list.map(function(item) {
+            return _normalizeComment(item, muniNum);
+        }).filter(Boolean);
+    } catch(e) {
+        return [];
+    }
+}
+
+function saveCommentsToStorage(muniNum, list) {
+    try {
+        localStorage.setItem(_commentsKey(muniNum), JSON.stringify(list || []));
+    } catch(e) {}
+}
+
+// Leer comentarios (con caché reactivo)
+function loadComments(muniNum) {
+    var key = String(muniNum);
+    if (fortaCommentsState.byMuni[key] && Array.isArray(fortaCommentsState.byMuni[key])) {
+        return fortaCommentsState.byMuni[key];
+    }
+    var list = loadCommentsFromStorage(muniNum);
+    fortaCommentsState.byMuni[key] = list;
+    return list;
+}
+
+// Inicialización de comentarios y sincronización con Firestore
+function initFortaComments() {
+    if (fortaCommentsState.initialized) return;
+    fortaCommentsState.initialized = true;
+
+    // 1. Cargar desde localStorage para disponibilidad instantánea
+    try {
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf('forta_comments_') === 0) {
+                var mId = k.replace('forta_comments_', '');
+                var stored = loadCommentsFromStorage(mId);
+                if (stored && stored.length) {
+                    fortaCommentsState.byMuni[String(mId)] = stored;
+                }
+            }
+        }
+    } catch(e) {}
+
+    // 2. Suscribirse a Firestore en tiempo real si está disponible
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            fortaCommentsState.unsubscribe = window.firebaseFirestore
+                .collection('comentarios')
+                .onSnapshot(function(snapshot) {
+                    var map = {};
+                    snapshot.forEach(function(doc) {
+                        var c = doc.data();
+                        if (!c.id) c.id = doc.id;
+                        var mId = String(c.municipio_id);
+                        if (!map[mId]) map[mId] = [];
+                        map[mId].push(c);
+                    });
+
+                    // Ordenar por fecha descendente y actualizar caché
+                    Object.keys(map).forEach(function(mId) {
+                        map[mId].sort(function(a, b) {
+                            return (b.timestamp || 0) - (a.timestamp || 0);
+                        });
+                        fortaCommentsState.byMuni[mId] = map[mId];
+                        saveCommentsToStorage(mId, map[mId]);
+                    });
+
+                    // Actualizar orden de la lista principal e insignias
+                    if (typeof applyFilters === 'function') {
+                        applyFilters();
+                    } else {
+                        refreshAllCommentBadges();
+                    }
+
+                    // Si hay un modal de detalle abierto, actualizar su vista
+                    if (window.__fortaActiveMuniNum) {
+                        renderCommentsList(window.__fortaActiveMuniNum);
+                    }
+                }, function(err) {
+                    console.warn('Firestore onSnapshot comentarios error:', err);
+                });
+        } catch(err) {
+            console.warn('No se pudo inicializar listener de Firestore comentarios:', err);
+        }
+    }
+}
+
+// Obtiene estadísticas de comentarios visibles para ordenamiento e insignias
+function getMuniCommentStats(muniNum) {
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var all = loadComments(muniNum);
+    if (!all || !all.length) return { total: 0, pending: 0, newestTimestamp: 0 };
+
+    var visible = all.filter(function(c) {
+        return (typeof puedeVerComentario === 'function') ? puedeVerComentario(sess, c) : true;
+    });
+    if (!visible.length) return { total: 0, pending: 0, newestTimestamp: 0 };
+
+    var userRol = sess ? String(sess.rol || '').toLowerCase().trim() : 'consulta';
+    var isAdmin = (typeof puedeAprobarComentarios === 'function') && puedeAprobarComentarios(userRol);
+    var pendingCount = isAdmin ? all.filter(function(c) { return c.estado === 'pendiente'; }).length : 0;
+
+    var newest = 0;
+    visible.forEach(function(c) {
+        var t = c.timestamp || 0;
+        if (t > newest) newest = t;
+    });
+
+    return {
+        total: visible.length,
+        pending: pendingCount,
+        newestTimestamp: newest
+    };
+}
+
+// Genera el HTML de la insignia de comentarios para la tarjeta de municipio
+function getMuniCardCommentPillHtml(muniNum) {
+    var stats = getMuniCommentStats(muniNum);
+    if (!stats.total) return '';
+
+    if (stats.pending > 0) {
+        return '<span class="muni-card__comment-pill has-pending" title="' + stats.pending + ' comentario(s) pendiente(s) de revisión (clic para ver)" onclick="event.stopPropagation(); openDetail(' + muniNum + ', null, true);">'
+            + '<i data-lucide="clock"></i>' + stats.pending + ' pend.</span>';
+    }
+    return '<span class="muni-card__comment-pill has-comments" title="' + stats.total + ' comentario(s) (clic para ver)" onclick="event.stopPropagation(); openDetail(' + muniNum + ', null, true);">'
+        + '<i data-lucide="message-circle"></i>' + stats.total + '</span>';
+}
+
+// Actualiza la insignia en las tarjetas visibles de un municipio específico
+function updateMuniCardCommentBadge(muniNum) {
+    var cards = document.querySelectorAll('.muni-card[data-muni-num="' + muniNum + '"]');
+    var pillHtml = getMuniCardCommentPillHtml(muniNum);
+    cards.forEach(function(card) {
+        var existing = card.querySelector('.muni-card__comment-pill');
+        if (existing) existing.remove();
+        if (pillHtml) {
+            var badge = card.querySelector('.muni-card__badge');
+            if (badge) {
+                badge.insertAdjacentHTML('beforebegin', pillHtml);
+            } else {
+                var head = card.querySelector('.muni-card__head');
+                if (head) head.insertAdjacentHTML('beforeend', pillHtml);
+            }
+        }
+    });
+    try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+}
+
+// Actualiza las insignias de todas las tarjetas renderizadas
+function refreshAllCommentBadges() {
+    var cards = document.querySelectorAll('.muni-card[data-muni-num]');
+    cards.forEach(function(card) {
+        var mNum = card.getAttribute('data-muni-num');
+        var existing = card.querySelector('.muni-card__comment-pill');
+        if (existing) existing.remove();
+        var pillHtml = getMuniCardCommentPillHtml(mNum);
+        if (pillHtml) {
+            var badge = card.querySelector('.muni-card__badge');
+            if (badge) {
+                badge.insertAdjacentHTML('beforebegin', pillHtml);
+            } else {
+                var head = card.querySelector('.muni-card__head');
+                if (head) head.insertAdjacentHTML('beforeend', pillHtml);
+            }
+        }
+    });
+    try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+}
 
 // Estado de edición activo
 var editingCommentId = null;
 
-// Leer comentarios de localStorage
-function loadComments(muniNum) {
-    try {
-        var raw = localStorage.getItem(_commentsKey(muniNum));
-        var list = raw ? JSON.parse(raw) : [];
-        var modified = false;
-        list.forEach(function(c, i) {
-            if (!c.id) {
-                c.id = 'c_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 4);
-                modified = true;
-            }
-        });
-        if (modified) saveComments(muniNum, list);
-        return list;
-    } catch(e) { return []; }
-}
-
-// Guardar comentarios en localStorage
-function saveComments(muniNum, list) {
-    try { localStorage.setItem(_commentsKey(muniNum), JSON.stringify(list)); } catch(e) {}
-}
-
-// Renderiza la lista de comentarios en el panel
+// Renderiza la lista de comentarios en el panel de detalle
 function renderCommentsList(muniNum) {
     var listEl = document.getElementById('comments-list-' + muniNum);
     if (!listEl) return;
-    var comments = loadComments(muniNum);
 
-    // Actualizar contadores en la UI si existen
-    var countLabel = comments.length ? ' (' + comments.length + ')' : '';
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var userRol = sess ? String(sess.rol || '').toLowerCase().trim() : 'consulta';
+    var allComments = loadComments(muniNum);
+
+    // Filtrar visibles para el usuario actual
+    var visibleComments = allComments.filter(function(c) {
+        return (typeof puedeVerComentario === 'function') ? puedeVerComentario(sess, c) : true;
+    });
+
+    var isAdmin = (typeof puedeAprobarComentarios === 'function') && puedeAprobarComentarios(userRol);
+    var pendingCount = isAdmin ? allComments.filter(function(c) { return c.estado === 'pendiente'; }).length : 0;
+
+    // Actualizar contadores en la UI del hero
+    var countLabel = '';
+    if (pendingCount > 0) {
+        countLabel = ' (' + visibleComments.length + ' · ' + pendingCount + ' pend.)';
+    } else if (visibleComments.length > 0) {
+        countLabel = ' (' + visibleComments.length + ')';
+    }
+
     var btnLabel = document.getElementById('btn-comments-label-' + muniNum);
     if (btnLabel) btnLabel.textContent = 'Comentarios' + countLabel;
     var titleEl = document.getElementById('comments-title-' + muniNum);
     if (titleEl) titleEl.innerHTML = '<i data-lucide="message-circle"></i>Notas y comentarios' + countLabel;
 
-    if (!comments.length) {
+    if (!visibleComments.length) {
         listEl.innerHTML = '<div class="comments-empty">Sin comentarios aún.</div>';
-        try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+        try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
         return;
     }
-    listEl.innerHTML = comments.map(function(c) {
+
+    listEl.innerHTML = visibleComments.map(function(c) {
         var inicial = (c.autor || '?').trim().charAt(0).toUpperCase();
         var isEditing = (editingCommentId === c.id);
+        var isPending = (c.estado === 'pendiente');
+
+        // Status tag
+        var statusTagHtml = '';
+        if (isPending) {
+            statusTagHtml = '<span class="comment-status-tag tag-pending"><i data-lucide="clock"></i> En revisión</span>';
+        } else if (isAdmin) {
+            statusTagHtml = '<span class="comment-status-tag tag-approved"><i data-lucide="check"></i> Aprobado</span>';
+        }
+
+        // Subtítulo con rol si existe
+        var rolLabel = c.rol ? ' <span class="c-role">· ' + escapeHtml(c.rol) + '</span>' : '';
         var editedLabel = c.editado ? '<span class="c-edited" title="Editado ' + escapeHtml(c.fecha_edicion || '') + '">(editado)</span>' : '';
-        
+
+        // Botones de moderación (admin sobre pendientes)
+        var modButtonsHtml = '';
+        if (isAdmin && isPending) {
+            modButtonsHtml = '<button type="button" class="comment-btn-approve" onclick="approveComment(' + muniNum + ', \'' + c.id + '\')" title="Aprobar comentario para que sea visible públicamente"><i data-lucide="check"></i> Aprobar</button>'
+                           + '<button type="button" class="comment-btn-reject" onclick="deleteComment(' + muniNum + ', \'' + c.id + '\', true)" title="Rechazar y descartar comentario"><i data-lucide="x"></i> Descartar</button>';
+        }
+
+        // Botones de editar y borrar según permisos
+        var canEditOrDelete = (typeof puedeEditarOEliminarComentario === 'function') && puedeEditarOEliminarComentario(sess, c);
+        var editDeleteButtonsHtml = '';
+        if (canEditOrDelete && !isEditing) {
+            editDeleteButtonsHtml = '<button type="button" class="comment-btn-action" onclick="startEditComment(' + muniNum + ', \'' + c.id + '\')" title="Editar comentario"><i data-lucide="pencil"></i></button>'
+                                  + '<button type="button" class="comment-btn-action btn-del" onclick="deleteComment(' + muniNum + ', \'' + c.id + '\')" title="Eliminar comentario"><i data-lucide="trash-2"></i></button>';
+        }
+
+        var actionsHtml = '';
+        if (!isEditing && (modButtonsHtml || editDeleteButtonsHtml)) {
+            actionsHtml = '<div class="comment-actions">' + modButtonsHtml + editDeleteButtonsHtml + '</div>';
+        }
+
         var bodyHtml = '';
         if (isEditing) {
             bodyHtml = '<div class="comment-edit-box">'
@@ -1835,23 +2139,21 @@ function renderCommentsList(muniNum) {
             bodyHtml = '<div class="comment-item__text">' + escapeHtml(c.texto) + '</div>';
         }
 
-        return '<div class="comment-item' + (isEditing ? ' is-editing' : '') + '">'
+        return '<div class="comment-item' + (isEditing ? ' is-editing' : '') + (isPending ? ' is-pending' : '') + '">'
             + '<div class="comment-item__avatar">' + inicial + '</div>'
             + '<div class="comment-item__body">'
             + '<div class="comment-item__meta">'
-            + '<span class="c-author">' + escapeHtml(c.autor || 'Usuario') + '</span>'
+            + '<span class="c-author">' + escapeHtml(c.autor || 'Usuario') + rolLabel + '</span>'
             + '<span>' + escapeHtml(c.fecha || '') + '</span>'
+            + statusTagHtml
             + editedLabel
-            + (isEditing ? '' : '<div class="comment-actions">'
-                + '<button type="button" class="comment-btn-action" onclick="startEditComment(' + muniNum + ', \'' + c.id + '\')" title="Editar comentario"><i data-lucide="pencil"></i></button>'
-                + '<button type="button" class="comment-btn-action btn-del" onclick="deleteComment(' + muniNum + ', \'' + c.id + '\')" title="Eliminar comentario"><i data-lucide="trash-2"></i></button>'
-                + '</div>')
+            + actionsHtml
             + '</div>'
             + bodyHtml
             + '</div></div>';
     }).join('');
 
-    try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+    try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
 }
 
 // Iniciar edición de un comentario
@@ -1874,38 +2176,119 @@ function cancelEditComment(muniNum) {
 }
 
 // Guardar edición
-function saveEditComment(muniNum, id) {
+async function saveEditComment(muniNum, id) {
     var ta = document.getElementById('comment-edit-input-' + id);
     if (!ta) return;
     var nuevoTexto = (ta.value || '').trim();
     if (!nuevoTexto) return;
 
-    var comments = loadComments(muniNum);
-    var item = comments.find(function(c) { return c.id === id; });
-    if (item) {
-        var ahora = new Date();
-        var fechaEd = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
-                    + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
-        item.texto = nuevoTexto;
-        item.editado = true;
-        item.fecha_edicion = fechaEd;
-        saveComments(muniNum, comments);
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var list = loadComments(muniNum);
+    var item = list.find(function(c) { return c.id === id; });
+    if (!item) return;
+
+    if (typeof puedeEditarOEliminarComentario === 'function' && !puedeEditarOEliminarComentario(sess, item)) {
+        alert('No tienes permiso para editar este comentario.');
+        return;
     }
+
+    var ahora = new Date();
+    var fechaEd = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+                + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+
+    item.texto = nuevoTexto;
+    item.editado = true;
+    item.fecha_edicion = fechaEd;
+
+    saveCommentsToStorage(muniNum, list);
     editingCommentId = null;
     renderCommentsList(muniNum);
+
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            await window.firebaseFirestore.collection('comentarios').doc(id).update({
+                texto: nuevoTexto,
+                editado: true,
+                fecha_edicion: fechaEd
+            });
+        } catch(err) {
+            console.warn('Error al actualizar comentario en Firestore:', err);
+        }
+    }
 }
 
-// Eliminar comentario
-function deleteComment(muniNum, id) {
-    if (!confirm('¿Deseas eliminar este comentario?')) return;
-    var comments = loadComments(muniNum);
-    comments = comments.filter(function(c) { return c.id !== id; });
-    saveComments(muniNum, comments);
+// Aprobar comentario pendiente (administrador)
+async function approveComment(muniNum, id) {
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var userRol = sess ? String(sess.rol || '').toLowerCase().trim() : 'consulta';
+    if (typeof puedeAprobarComentarios === 'function' && !puedeAprobarComentarios(userRol)) {
+        alert('Solo los administradores pueden aprobar comentarios.');
+        return;
+    }
+
+    var list = loadComments(muniNum);
+    var target = list.find(function(c) { return c.id === id; });
+    if (!target) return;
+
+    var ahora = new Date();
+    var fechaStr = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+                 + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+
+    target.estado = 'aprobado';
+    target.aprobado_por = sess ? (sess.usuario || sess.nombre || 'admin') : 'admin';
+    target.fecha_aprobacion = fechaStr;
+
+    saveCommentsToStorage(muniNum, list);
+    renderCommentsList(muniNum);
+    updateMuniCardCommentBadge(muniNum);
+    applyFilters();
+
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            await window.firebaseFirestore.collection('comentarios').doc(id).update({
+                estado: 'aprobado',
+                aprobado_por: target.aprobado_por,
+                fecha_aprobacion: fechaStr
+            });
+        } catch(err) {
+            console.warn('Error al actualizar aprobación en Firestore:', err);
+        }
+    }
+}
+
+// Eliminar o descartar comentario
+async function deleteComment(muniNum, id, isReject) {
+    var msg = isReject ? '¿Deseas descartar este comentario pendiente?' : '¿Deseas eliminar este comentario?';
+    if (!confirm(msg)) return;
+
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var list = loadComments(muniNum);
+    var item = list.find(function(c) { return c.id === id; });
+
+    if (item && typeof puedeEditarOEliminarComentario === 'function' && !puedeEditarOEliminarComentario(sess, item)) {
+        alert('No tienes permiso para eliminar este comentario.');
+        return;
+    }
+
+    list = list.filter(function(c) { return c.id !== id; });
+    fortaCommentsState.byMuni[String(muniNum)] = list;
+    saveCommentsToStorage(muniNum, list);
+
     if (editingCommentId === id) editingCommentId = null;
     renderCommentsList(muniNum);
+    updateMuniCardCommentBadge(muniNum);
+    applyFilters();
+
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            await window.firebaseFirestore.collection('comentarios').doc(id).delete();
+        } catch(err) {
+            console.warn('Error al eliminar comentario de Firestore:', err);
+        }
+    }
 }
 
-// Abrir/cerrar el panel de localidades
+// Abrir/cerrar panel de localidades
 function toggleLocalidades(muniNum) {
     var panel = document.getElementById('localidades-panel-' + muniNum);
     var btn   = document.getElementById('btn-loc-' + muniNum);
@@ -1913,18 +2296,17 @@ function toggleLocalidades(muniNum) {
     var isOpen = panel.classList.toggle('open');
     if (btn) btn.classList.toggle('active', isOpen);
     if (isOpen) {
-        // Cerrar panel de comentarios si está abierto para mantener la vista limpia
         var cPanel = document.getElementById('comments-panel-' + muniNum);
         var cBtn   = document.getElementById('btn-comments-' + muniNum);
         if (cPanel && cPanel.classList.contains('open')) {
             cPanel.classList.remove('open');
             if (cBtn) cBtn.classList.remove('active');
         }
-        try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+        try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
     }
 }
 
-// Abrir/cerrar el panel de comentarios
+// Abrir/cerrar panel de comentarios
 function toggleComments(muniNum) {
     var panel = document.getElementById('comments-panel-' + muniNum);
     var btn   = document.getElementById('btn-comments-' + muniNum);
@@ -1932,7 +2314,6 @@ function toggleComments(muniNum) {
     var isOpen = panel.classList.toggle('open');
     if (btn) btn.classList.toggle('active', isOpen);
     if (isOpen) {
-        // Cerrar panel de localidades si está abierto para mantener la vista limpia
         var lPanel = document.getElementById('localidades-panel-' + muniNum);
         var lBtn   = document.getElementById('btn-loc-' + muniNum);
         if (lPanel && lPanel.classList.contains('open')) {
@@ -1940,38 +2321,75 @@ function toggleComments(muniNum) {
             if (lBtn) lBtn.classList.remove('active');
         }
         renderCommentsList(muniNum);
-        try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
-        // Foco en el textarea
+        try { if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
         var ta = document.getElementById('comment-input-' + muniNum);
         if (ta) setTimeout(function() { ta.focus(); }, 80);
     }
 }
 
 // Agregar un nuevo comentario
-function addComment(muniNum) {
+async function addComment(muniNum) {
     var ta = document.getElementById('comment-input-' + muniNum);
     if (!ta) return;
     var texto = (ta.value || '').trim();
     if (!texto) return;
 
-    // Obtener nombre del usuario de sesión (si existe)
-    var autor = 'Usuario';
-    try {
-        var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
-        if (sess && (sess.nombre || sess.usuario)) autor = sess.nombre || sess.usuario;
-    } catch(e) {}
+    var sess = (typeof fortaGetSession === 'function') ? fortaGetSession() : null;
+    var userRol = sess ? String(sess.rol || '').toLowerCase().trim() : 'consulta';
+
+    // Validar permiso de inserción
+    if (typeof puedeComentar === 'function' && !puedeComentar(userRol, muniNum)) {
+        alert('No tienes permisos para agregar comentarios en este municipio.');
+        return;
+    }
+
+    var permisos = (typeof getPermisosComentario === 'function') ? getPermisosComentario(userRol) : { comentar_sin_revision: true };
+    var estadoInicial = permisos.comentar_sin_revision ? 'aprobado' : 'pendiente';
+
+    var autorNombre = (sess && (sess.nombre || sess.usuario)) ? (sess.nombre || sess.usuario) : 'Usuario';
+    var autorUsuario = sess ? (sess.usuario || '') : '';
 
     var ahora = new Date();
-    var fecha = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
-              + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+    var fechaStr = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+                 + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
 
-    var newId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    var comments = loadComments(muniNum);
-    comments.unshift({ id: newId, autor: autor, fecha: fecha, texto: texto });
-    saveComments(muniNum, comments);
+    var newId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+    var mMun = (allData || []).find(function(x) { return Number(x['numero de municipio']) === Number(muniNum); });
+    var nombreMuni = mMun ? (mMun.municipio || '') : '';
+
+    var nuevoComentario = {
+        id: newId,
+        municipio_id: Number(muniNum),
+        municipio_nombre: nombreMuni,
+        texto: texto,
+        autor: autorNombre,
+        usuario: autorUsuario,
+        rol: userRol,
+        fecha: fechaStr,
+        timestamp: Date.now(),
+        estado: estadoInicial,
+        editado: false,
+        fecha_edicion: null,
+        aprobado_por: null,
+        fecha_aprobacion: null
+    };
+
+    var list = loadComments(muniNum);
+    list.unshift(nuevoComentario);
+    fortaCommentsState.byMuni[String(muniNum)] = list;
+    saveCommentsToStorage(muniNum, list);
 
     ta.value = '';
     renderCommentsList(muniNum);
-    try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
-}
+    updateMuniCardCommentBadge(muniNum);
+    applyFilters();
 
+    if (typeof window !== 'undefined' && window.firebaseFirestore) {
+        try {
+            await window.firebaseFirestore.collection('comentarios').doc(newId).set(nuevoComentario);
+        } catch(err) {
+            console.warn('Error al guardar comentario en Firestore (guardado en caché local):', err);
+        }
+    }
+}

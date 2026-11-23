@@ -63,51 +63,78 @@ function setAllData(data) {
 
 // ===== PERMISOS Y ROLES =====
 var FORTA_COMMENT_RULES = {
-    puede_comentar_sin_revision: ['admin', 'presidenta', 'presidente'],
-    puede_comentar_con_revision: ['coordinador'],
+    puede_comentar_sin_revision: ['admin', 'presidenta', 'presidente', 'capturista'],
+    puede_comentar_con_revision: ['coordinador', 'coordinador_g20'],
     no_puede_comentar: ['consulta'],
     puede_moderar: ['admin'],
     puede_aprobar: ['admin']
 };
 
 function getPermisosComentario(rol) {
+    var r = String(rol || 'consulta').toLowerCase().trim();
     var reglas = {
-        admin: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: true, puede_aprobar: true },
-        presidenta: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: false, puede_aprobar: false },
-        presidente: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: false, puede_aprobar: false },
-        coordinador: { puede_comentar: true, comentar_sin_revision: false, puede_moderar: false, puede_aprobar: false },
-        consulta: { puede_comentar: false, comentar_sin_revision: false, puede_moderar: false, puede_aprobar: false }
+        admin: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: true, puede_aprobar: true, ver_pendientes_todos: true },
+        presidenta: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: false, puede_aprobar: false, ver_pendientes_todos: false, ver_pendientes_propios: true },
+        presidente: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: false, puede_aprobar: false, ver_pendientes_todos: false, ver_pendientes_propios: true },
+        coordinador: { puede_comentar: true, comentar_sin_revision: false, puede_moderar: false, puede_aprobar: false, ver_pendientes_propios: true },
+        coordinador_g20: { puede_comentar: true, comentar_sin_revision: false, puede_moderar: false, puede_aprobar: false, ver_pendientes_propios: true },
+        capturista: { puede_comentar: true, comentar_sin_revision: true, puede_moderar: false, puede_aprobar: false, ver_pendientes_propios: true },
+        consulta: { puede_comentar: false, comentar_sin_revision: false, puede_moderar: false, puede_aprobar: false, ver_pendientes_todos: false }
     };
-    return reglas[rol] || reglas.consulta;
+    return reglas[r] || reglas.consulta;
 }
 
 function puedeComentar(rol, municipioNumero) {
     var p = getPermisosComentario(rol);
     if (!p.puede_comentar) return false;
-    if (p.comentar_sin_revision) return true;
-    if (rol === 'coordinador') {
+    var r = String(rol || '').toLowerCase().trim();
+    if (r === 'coordinador' || r === 'coordinador_g20') {
         if (!Array.isArray(fortaScope) || fortaScope.length === 0) return true;
-        return fortaScope.includes(municipioNumero) || fortaScope.includes(String(municipioNumero));
+        var num = Number(municipioNumero);
+        return fortaScope.some(function(n) { return Number(n) === num; });
     }
     return true;
 }
 
 function puedeModerarComentarios(rol) {
-    return FORTA_COMMENT_RULES.puede_moderar.indexOf(rol) >= 0;
+    return FORTA_COMMENT_RULES.puede_moderar.indexOf(String(rol || '').toLowerCase().trim()) >= 0;
 }
 
 function puedeAprobarComentarios(rol) {
-    return FORTA_COMMENT_RULES.puede_aprobar.indexOf(rol) >= 0;
+    return FORTA_COMMENT_RULES.puede_aprobar.indexOf(String(rol || '').toLowerCase().trim()) >= 0;
+}
+
+function puedeEditarOEliminarComentario(session, comment) {
+    if (!session || !comment) return false;
+    var rol = String(session.rol || '').toLowerCase().trim();
+    if (puedeModerarComentarios(rol)) return true;
+    var usuarioActual = String(session.usuario || '').toLowerCase().trim();
+    var autorComentario = String(comment.usuario || comment.autor || '').toLowerCase().trim();
+    return usuarioActual && autorComentario && (usuarioActual === autorComentario);
+}
+
+function puedeVerComentario(session, comment) {
+    if (!comment) return false;
+    if (comment.estado === 'aprobado' || !comment.estado) return true;
+    if (!session) return false;
+    var rol = String(session.rol || '').toLowerCase().trim();
+    var p = getPermisosComentario(rol);
+    if (p.ver_pendientes_todos || p.puede_aprobar) return true;
+    if (p.ver_pendientes_propios) {
+        var uActual = String(session.usuario || '').toLowerCase().trim();
+        var uAutor = String(comment.usuario || comment.autor || '').toLowerCase().trim();
+        return uActual && uAutor && (uActual === uAutor);
+    }
+    return false;
 }
 
 function puedeVerComentariosPendientes(rol) {
     var p = getPermisosComentario(rol);
-    return p.ver_comentarios_pendientes === true;
+    return p.ver_pendientes_todos === true || p.puede_aprobar === true;
 }
 
 function puedeVerComentariosAprobados(rol) {
-    var p = getPermisosComentario(rol);
-    return p.ver_comentarios_aprobados === true;
+    return true; // Cualquier usuario con sesión activa puede ver aprobados
 }
 
 window.fortaUsers = {
@@ -123,6 +150,8 @@ window.fortaUsers = {
     puedeComentar: puedeComentar,
     puedeModerarComentarios: puedeModerarComentarios,
     puedeAprobarComentarios: puedeAprobarComentarios,
+    puedeEditarOEliminarComentario: puedeEditarOEliminarComentario,
+    puedeVerComentario: puedeVerComentario,
     puedeVerComentariosPendientes: puedeVerComentariosPendientes,
     puedeVerComentariosAprobados: puedeVerComentariosAprobados,
     FORTA_COMMENT_RULES: FORTA_COMMENT_RULES
