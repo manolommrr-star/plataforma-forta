@@ -60,7 +60,7 @@ jobs:
 
       # Subir SOLO la carpeta public/ — scripts/ y archivos de raíz nunca se despliegan
       - name: Subir public/ a GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: 'public'
 
