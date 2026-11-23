@@ -92,53 +92,71 @@ async function loadData() {
     var munisData = [];
     var origen = 'Firestore';
 
-    // 1. Intentar cargar desde Firestore con timeout si está disponible
+    // 1. Intentar cargar desde Firestore con timeout si esta disponible
     if (typeof window !== 'undefined' && window.firebaseFirestore) {
         try {
             var firestorePromise = (async function() {
-                var munisSnapshot = await window.firebaseFirestore.collection('municipios').get();
+                var [infoSnap, votSnap, contSnap] = await Promise.all([
+                    window.firebaseFirestore.collection('municipios_info').get(),
+                    window.firebaseFirestore.collection('municipios_votaciones').get(),
+                    window.firebaseFirestore.collection('municipios_contactos').get()
+                ]);
+                var infoMap = {};
+                infoSnap.forEach(function(doc) { infoMap[doc.id] = doc.data(); });
+                var votMap = {};
+                votSnap.forEach(function(doc) { votMap[doc.id] = doc.data(); });
+                var contMap = {};
+                contSnap.forEach(function(doc) { contMap[doc.id] = doc.data(); });
+
                 var list = [];
-                munisSnapshot.forEach(function(doc) {
-                    var d = doc.data();
-                    if (!d['numero de municipio']) d['numero de municipio'] = Number(doc.id);
-                    list.push(d);
+                Object.keys(infoMap).forEach(function(id) {
+                    var m = Object.assign({}, infoMap[id]);
+                    if (votMap[id]) Object.assign(m, votMap[id]);
+                    if (contMap[id]) Object.assign(m, contMap[id]);
+                    if (!m['numero de municipio']) m['numero de municipio'] = Number(id) || null;
+                    if (!m.municipio) m.municipio = id;
+                    list.push(m);
                 });
-                // Enriquecer con contactos
-                try {
-                    var cSnap = await window.firebaseFirestore.collection('municipios_contactos').get();
-                    var cMap = {};
-                    cSnap.forEach(function(doc) { cMap[doc.id] = doc.data(); });
-                    list.forEach(function(m) {
-                        var c = cMap[String(m.municipio)];
-                        if (c) {
-                            if (Array.isArray(c.sindicos)) m.sindicos = c.sindicos;
-                            if (Array.isArray(c.regidores)) m.regidores = c.regidores;
-                        }
-                    });
-                } catch (e) { console.warn('contactos firestore:', e); }
                 return list;
             })();
 
             var timeoutPromise = new Promise(function(_, reject) {
-                setTimeout(function() { reject(new Error('TIMEOUT_FIRESTORE')); }, 2500);
+                setTimeout(function() { reject(new Error('TIMEOUT_FIRESTORE')); }, 5000);
             });
 
             munisData = await Promise.race([firestorePromise, timeoutPromise]);
-            console.log('✅ Municipios cargados desde Firestore (' + munisData.length + ')');
+            console.log('Municipios cargados desde Firestore (info+votaciones+contactos) (' + munisData.length + ')');
         } catch (err) {
-            console.warn('⚠️ No se pudo obtener municipios de Firestore (' + (err.message || err) + '). Activando respaldo local...');
+            console.warn('No se pudo obtener municipios de Firestore (' + (err.message || err) + '). Activando respaldo local...');
             munisData = [];
         }
     }
 
-    // 2. Fallback automático a data/municipios.json
+    // 2. Fallback automatico a JSONs locales
     if (!munisData || !munisData.length) {
-        origen = 'municipios.json (local)';
+        origen = 'JSON local (info+votaciones+contactos)';
         try {
-            var res = await fetch('data/municipios.json', { cache: 'no-store' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            munisData = await res.json();
-            console.log('🔄 Municipios cargados desde respaldo local (' + munisData.length + ')');
+            var [infoRes, votRes, contRes] = await Promise.all([
+                fetch('data/municipios_info.json', { cache: 'no-store' }),
+                fetch('data/municipios_votaciones.json', { cache: 'no-store' }),
+                fetch('data/municipios_contactos.json', { cache: 'no-store' })
+            ]);
+            if (!infoRes.ok) throw new Error('HTTP ' + infoRes.status);
+            var infoData = await infoRes.json();
+            var votData = votRes.ok ? await votRes.json() : {};
+            var contData = contRes.ok ? await contRes.json() : {};
+
+            var list = [];
+            Object.keys(infoData).forEach(function(id) {
+                var m = Object.assign({}, infoData[id]);
+                if (votData[id]) Object.assign(m, votData[id]);
+                if (contData[id]) Object.assign(m, contData[id]);
+                if (!m['numero de municipio']) m['numero de municipio'] = Number(id) || null;
+                if (!m.municipio) m.municipio = id;
+                list.push(m);
+            });
+            munisData = list;
+            console.log('Municipios cargados desde JSON local (' + munisData.length + ')');
         } catch (err) {
             console.error('Error cargando municipios desde respaldo local:', err);
             setSubtitle('ERROR al cargar municipios.');
@@ -936,11 +954,10 @@ function openDetail(id, municipioObj) {
     html += '<div class="detail-hero">';
     html += '<div class="detail-hero-main">';
     html += '<div class="detail-hero-txt">';
-    html += '<div class="detail-eyebrow">Ficha municipal · FORTA</div>';
-    html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
+        html += '<div class="detail-title">' + escapeHtml(m.municipio || 'Sin nombre') + '</div>';
     html += '<div class="detail-sub">';
     if (est) {
-        html += '<span class="hero-status-badge ' + estBadgeCls + '">' + escapeHtml(estatusShort(est)) + ' · ' + escapeHtml(est) + '</span>';
+        html += '<span class="hero-status-badge ' + estBadgeCls + '">' + escapeHtml(est === 'SE' ? 'SE · Sin Estructura' : (estatusShort(est) !== String(est).trim() ? estatusShort(est) + ' · ' + est : est)) + '</span>';
     } else {
         html += '<span style="opacity:.7">Sin estatus de estructura</span>';
     }
@@ -955,6 +972,9 @@ function openDetail(id, municipioObj) {
     if (m.coordinador_zona) html += '<span class="hero-chip"><i data-lucide="user-round-cog" style="width:9px;height:9px;"></i>' + escapeHtml(nameCase(m.coordinador_zona)) + '</span>';
     html += '</div>';
 
+    var existingComments = loadComments(muniNum);
+    var cCountLabel = existingComments.length ? ' (' + existingComments.length + ')' : '';
+
     // Barra de acciones: Mapa · Localidades · Comentarios
     html += '<div class="hero-actions">';
     html += '<button type="button" class="hero-action-btn" onclick="verUbicacion(\'' + jsMun + '\')" title="Ver en Google Maps">'
@@ -964,7 +984,7 @@ function openDetail(id, municipioObj) {
           + '<i data-lucide="map"></i>Localidades</button>';
     html += '<button type="button" class="hero-action-btn btn-comments" id="btn-comments-' + muniNum + '" '
           + 'onclick="toggleComments(' + muniNum + ')" title="Comentarios">'
-          + '<i data-lucide="message-circle"></i>Comentarios</button>';
+          + '<i data-lucide="message-circle"></i><span id="btn-comments-label-' + muniNum + '">Comentarios' + cCountLabel + '</span></button>';
     html += '</div>';
     html += '</div>'; // .detail-hero
 
@@ -973,9 +993,9 @@ function openDetail(id, municipioObj) {
 
     // ── PANEL DE COMENTARIOS (oculto por defecto) ──
     html += '<div class="comments-panel" id="comments-panel-' + muniNum + '">';
-    html += '<div class="comments-panel__title"><i data-lucide="message-circle"></i>Notas y comentarios</div>';
+    html += '<div class="comments-panel__title" id="comments-title-' + muniNum + '"><i data-lucide="message-circle"></i>Notas y comentarios' + cCountLabel + '</div>';
     html += '<div class="comment-input-row">';
-    html += '<textarea id="comment-input-' + muniNum + '" placeholder="Escribe un comentario sobre este municipio…" rows="2"></textarea>';
+    html += '<textarea id="comment-input-' + muniNum + '" placeholder="Escribe un comentario sobre este municipio…" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();addComment(' + muniNum + ');}"></textarea>';
     html += '<button type="button" class="comment-send-btn" onclick="addComment(' + muniNum + ')" title="Enviar comentario"><i data-lucide="send"></i></button>';
     html += '</div>';
     html += '<div class="comments-list" id="comments-list-' + muniNum + '">';
@@ -1122,7 +1142,7 @@ function openDetail(id, municipioObj) {
     html += secHeader('network', 'si-org', 'Organización partidista', null);
     html += '<div class="info-list">';
     html += infoRow('user-round-cog', 'ii-green', 'Coordinador de zona', nameCase(m.coordinador_zona) || null, false, true);
-    html += infoRow('shield-check', 'ii-blue', 'Estatus de estructura', est ? estatusShort(est) + ' · ' + est : null, false, true);
+    html += infoRow('shield-check', 'ii-blue', 'Estatus de estructura', est ? (est === 'SE' ? 'SE · Sin Estructura' : (estatusShort(est) !== String(est).trim() ? estatusShort(est) + ' · ' + est : est)) : null, false, true);
     html += infoRow('calendar-check', 'ii-teal', 'Vigencia de la estructura', vigenciaFmt || null, false, true);
     html += infoRow('target', 'ii-amber', 'Meta soldados dic (2026)', formatNum(m.soldados), m.soldados != null);
     html += infoRow('users-round', 'ii-purple', 'Meta afiliados dic (2026)', formatNum(m.meta_afiliados), m.meta_afiliados != null);
@@ -1146,43 +1166,6 @@ function openDetail(id, municipioObj) {
         html += '</div>';
     }
 
-    var metricas = m.metricas || {};
-    var metricKeys = Object.keys(metricas);
-    if (metricKeys.length) {
-        html += '<div class="detail-section">';
-        html += secHeader('bar-chart-2', 'si-meta', 'Métricas Personalizadas', metricKeys.length);
-        html += '<div class="info-grid">';
-        metricKeys.forEach(function(k) {
-            var v = metricas[k];
-            var display = (typeof v === 'number') ? formatNum(Math.round(v * 100) / 100) : v;
-            html += infoRow('activity', 'ii-purple', k, display, typeof v === 'number');
-        });
-        html += '</div></div>';
-    }
-
-    var etiquetas = m.etiquetas || [];
-    if (etiquetas.length) {
-        html += '<div class="detail-section">';
-        html += secHeader('tag', 'si-tag', 'Etiquetas', etiquetas.length);
-        html += '<div class="tags-container" style="margin-top:4px;">';
-        etiquetas.forEach(function(t) {
-            html += '<span class="tag" style="cursor:default;">' + escapeHtml(t) + '</span>';
-        });
-        html += '</div></div>';
-    }
-
-    var meta = m.metadata || {};
-    var metaKeys = Object.keys(meta);
-    if (metaKeys.length) {
-        html += '<div class="detail-section">';
-        html += secHeader('database', 'si-data', 'Metadata', metaKeys.length);
-        html += '<div class="info-list">';
-        metaKeys.forEach(function(k) {
-            html += infoRow('circle-dot', 'ii-gray', k, meta[k], false, true);
-        });
-        html += '</div></div>';
-    }
-
     html += '<div class="detail-footer">' +
         '<span>Plataforma Forta 2026</span>' +
         '<span class="detail-footer-sep">·</span>' +
@@ -1192,6 +1175,7 @@ function openDetail(id, municipioObj) {
     content.innerHTML = html;
     document.getElementById('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
+    renderCommentsList(m['numero de municipio']);
     try { if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') { lucide.createIcons(); } } catch(e) {}
 
     // Dibujar los 3 pasteles por partido (uno por votacion, tras tener el canvas en el DOM)
@@ -1789,11 +1773,23 @@ function downloadBlob(blob, filename) {
 // Clave de almacenamiento: por número de municipio
 function _commentsKey(muniNum) { return 'forta_comments_' + muniNum; }
 
+// Estado de edición activo
+var editingCommentId = null;
+
 // Leer comentarios de localStorage
 function loadComments(muniNum) {
     try {
         var raw = localStorage.getItem(_commentsKey(muniNum));
-        return raw ? JSON.parse(raw) : [];
+        var list = raw ? JSON.parse(raw) : [];
+        var modified = false;
+        list.forEach(function(c, i) {
+            if (!c.id) {
+                c.id = 'c_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 4);
+                modified = true;
+            }
+        });
+        if (modified) saveComments(muniNum, list);
+        return list;
     } catch(e) { return []; }
 }
 
@@ -1807,22 +1803,106 @@ function renderCommentsList(muniNum) {
     var listEl = document.getElementById('comments-list-' + muniNum);
     if (!listEl) return;
     var comments = loadComments(muniNum);
+
+    // Actualizar contadores en la UI si existen
+    var countLabel = comments.length ? ' (' + comments.length + ')' : '';
+    var btnLabel = document.getElementById('btn-comments-label-' + muniNum);
+    if (btnLabel) btnLabel.textContent = 'Comentarios' + countLabel;
+    var titleEl = document.getElementById('comments-title-' + muniNum);
+    if (titleEl) titleEl.innerHTML = '<i data-lucide="message-circle"></i>Notas y comentarios' + countLabel;
+
     if (!comments.length) {
         listEl.innerHTML = '<div class="comments-empty">Sin comentarios aún.</div>';
+        try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
         return;
     }
     listEl.innerHTML = comments.map(function(c) {
         var inicial = (c.autor || '?').trim().charAt(0).toUpperCase();
-        return '<div class="comment-item">'
+        var isEditing = (editingCommentId === c.id);
+        var editedLabel = c.editado ? '<span class="c-edited" title="Editado ' + escapeHtml(c.fecha_edicion || '') + '">(editado)</span>' : '';
+        
+        var bodyHtml = '';
+        if (isEditing) {
+            bodyHtml = '<div class="comment-edit-box">'
+                + '<textarea class="comment-edit-textarea" id="comment-edit-input-' + c.id + '" rows="2" '
+                + 'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();saveEditComment(' + muniNum + ',\'' + c.id + '\');}else if(event.key===\'Escape\'){cancelEditComment(' + muniNum + ');}">'
+                + escapeHtml(c.texto) + '</textarea>'
+                + '<div class="comment-edit-buttons">'
+                + '<button type="button" class="comment-btn-cancel" onclick="cancelEditComment(' + muniNum + ')">Cancelar</button>'
+                + '<button type="button" class="comment-btn-save" onclick="saveEditComment(' + muniNum + ', \'' + c.id + '\')">Guardar</button>'
+                + '</div></div>';
+        } else {
+            bodyHtml = '<div class="comment-item__text">' + escapeHtml(c.texto) + '</div>';
+        }
+
+        return '<div class="comment-item' + (isEditing ? ' is-editing' : '') + '">'
             + '<div class="comment-item__avatar">' + inicial + '</div>'
             + '<div class="comment-item__body">'
             + '<div class="comment-item__meta">'
             + '<span class="c-author">' + escapeHtml(c.autor || 'Usuario') + '</span>'
             + '<span>' + escapeHtml(c.fecha || '') + '</span>'
+            + editedLabel
+            + (isEditing ? '' : '<div class="comment-actions">'
+                + '<button type="button" class="comment-btn-action" onclick="startEditComment(' + muniNum + ', \'' + c.id + '\')" title="Editar comentario"><i data-lucide="pencil"></i></button>'
+                + '<button type="button" class="comment-btn-action btn-del" onclick="deleteComment(' + muniNum + ', \'' + c.id + '\')" title="Eliminar comentario"><i data-lucide="trash-2"></i></button>'
+                + '</div>')
             + '</div>'
-            + '<div class="comment-item__text">' + escapeHtml(c.texto) + '</div>'
+            + bodyHtml
             + '</div></div>';
     }).join('');
+
+    try { if (lucide && lucide.createIcons) lucide.createIcons(); } catch(e) {}
+}
+
+// Iniciar edición de un comentario
+function startEditComment(muniNum, id) {
+    editingCommentId = id;
+    renderCommentsList(muniNum);
+    var ta = document.getElementById('comment-edit-input-' + id);
+    if (ta) {
+        ta.focus();
+        var val = ta.value;
+        ta.value = '';
+        ta.value = val;
+    }
+}
+
+// Cancelar edición
+function cancelEditComment(muniNum) {
+    editingCommentId = null;
+    renderCommentsList(muniNum);
+}
+
+// Guardar edición
+function saveEditComment(muniNum, id) {
+    var ta = document.getElementById('comment-edit-input-' + id);
+    if (!ta) return;
+    var nuevoTexto = (ta.value || '').trim();
+    if (!nuevoTexto) return;
+
+    var comments = loadComments(muniNum);
+    var item = comments.find(function(c) { return c.id === id; });
+    if (item) {
+        var ahora = new Date();
+        var fechaEd = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+                    + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+        item.texto = nuevoTexto;
+        item.editado = true;
+        item.fecha_edicion = fechaEd;
+        saveComments(muniNum, comments);
+    }
+    editingCommentId = null;
+    renderCommentsList(muniNum);
+}
+
+// Eliminar comentario
+function deleteComment(muniNum, id) {
+    if (!confirm('¿Deseas eliminar este comentario?')) return;
+    var comments = loadComments(muniNum);
+    comments = comments.filter(function(c) { return c.id !== id; });
+    saveComments(muniNum, comments);
+    if (editingCommentId === id) editingCommentId = null;
+    renderCommentsList(muniNum);
 }
 
 // Abrir/cerrar el panel de localidades
@@ -1885,8 +1965,9 @@ function addComment(muniNum) {
     var fecha = ahora.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
               + ' ' + ahora.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
 
+    var newId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     var comments = loadComments(muniNum);
-    comments.unshift({ autor: autor, fecha: fecha, texto: texto });
+    comments.unshift({ id: newId, autor: autor, fecha: fecha, texto: texto });
     saveComments(muniNum, comments);
 
     ta.value = '';
