@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -58,9 +58,17 @@ jobs:
       - name: Verificar public/firebase-config.js generado
         run: cat public/firebase-config.js
 
-      # Subir SOLO la carpeta public/ — scripts/ y archivos de raíz nunca se despliegan
-      - name: Subir public/ a GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      # Configurar GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Subir SOLO la carpeta public/ como artefacto de Pages
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          path: ./public
+
+      # Desplegar el artefacto en GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
