@@ -1199,7 +1199,15 @@ function openDetail(id, municipioObj, autoOpenComments) {
     if (hasGobInfo) {
         html += '<div class="detail-section ds-gobierno">';
         html += secHeader('gavel', 'si-gov', 'Gobierno', null);
-        // 4a) Contactos: Síndico y Regidores
+        // 4a) Datos PP (nombres)
+        if (ppPre || ppFed || ppLoc) {
+            html += '<div class="info-list sec-info">';
+            if (ppPre) html += infoRow('star',     'ii-amber',  '(PP) Presidente Municipal',   personParty(ppPre), false, true);
+            if (ppFed) html += infoRow('globe',    'ii-blue',   '(PP) Diputado Federal',      personParty(ppFed), false, true);
+            if (ppLoc) html += infoRow('landmark', 'ii-purple', '(PP) Diputado Local',         personParty(ppLoc), false, true);
+            html += '</div>';
+        }
+        // 4b) Contactos: Síndico y Regidores
         if (hasSindicos || hasRegidores) {
             html += '<div class="contact-list sec-contacts">';
             if (hasSindicos) {
@@ -1217,14 +1225,6 @@ function openDetail(id, municipioObj, autoOpenComments) {
                     html += contactRow('Regidor' + (rid ? ' ' + rid : ''), name, '', phone);
                 });
             }
-            html += '</div>';
-        }
-        // 4b) Datos PP
-        if (ppFed || ppLoc || ppPre) {
-            html += '<div class="info-list sec-info">';
-            if (ppPre) html += infoRow('star',     'ii-amber',  '(PP) Presidente Municipal',   personParty(ppPre), false, true);
-            if (ppFed) html += infoRow('globe',    'ii-blue',   '(PP) Diputado Federal',      personParty(ppFed), false, true);
-            if (ppLoc) html += infoRow('landmark', 'ii-purple', '(PP) Diputado Local',         personParty(ppLoc), false, true);
             html += '</div>';
         }
         html += '</div>';
