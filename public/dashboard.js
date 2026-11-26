@@ -2,6 +2,7 @@
    Dashboard.js — Panel de Fortalecimiento Interno
    Todas las funciones interactivas del dashboard.
    Los datos se cargan SOLO desde data/municipios.json via fetch.
+   Build: 2b01d28 — 2026-11-25
    ========================================================================== */
 
 let allData = [];
