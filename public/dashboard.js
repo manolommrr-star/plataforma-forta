@@ -1935,35 +1935,21 @@ function _normalizeComment(c, defaultMuniId) {
     return obj;
 }
 
-function loadCommentsFromStorage(muniNum) {
-    try {
-        var raw = localStorage.getItem(_commentsKey(muniNum));
-        if (!raw) return [];
-        var list = JSON.parse(raw);
-        if (!Array.isArray(list)) return [];
-        return list.map(function(item) {
-            return _normalizeComment(item, muniNum);
-        }).filter(Boolean);
-    } catch(e) {
-        return [];
-    }
+function loadCommentsFromStorage() {
+    return [];
 }
 
-function saveCommentsToStorage(muniNum, list) {
-    try {
-        localStorage.setItem(_commentsKey(muniNum), JSON.stringify(list || []));
-    } catch(e) {}
+function saveCommentsToStorage() {
+    // Deshabilitado: los comentarios solo viven en Firestore (sin caché local).
 }
 
-// Leer comentarios (con caché reactivo)
+// Leer comentarios (solo desde estado en memoria sincronizado con Firestore)
 function loadComments(muniNum) {
     var key = String(muniNum);
-    if (fortaCommentsState.byMuni[key] && Array.isArray(fortaCommentsState.byMuni[key])) {
-        return fortaCommentsState.byMuni[key];
+    if (!fortaCommentsState.byMuni[key]) {
+        fortaCommentsState.byMuni[key] = [];
     }
-    var list = loadCommentsFromStorage(muniNum);
-    fortaCommentsState.byMuni[key] = list;
-    return list;
+    return fortaCommentsState.byMuni[key];
 }
 
 // Carga inicial de comentarios desde Firestore (una sola vez)
@@ -1983,11 +1969,8 @@ async function loadInitialCommentsFromFirestore() {
             map[mId].sort(function(a, b) {
                 return (b.timestamp || 0) - (a.timestamp || 0);
             });
-            var existente = fortaCommentsState.byMuni[mId] || [];
-            var combinados = mergeComments(existente, map[mId]);
-            fortaCommentsState.byMuni[mId] = combinados;
-            saveCommentsToStorage(mId, combinados);
         });
+        fortaCommentsState.byMuni = map;
     } catch(err) {
         console.warn('Firestore get inicial comentarios error:', err);
     }
@@ -2038,24 +2021,20 @@ function initFortaComments() {
     if (fortaCommentsState.initialized) return;
     fortaCommentsState.initialized = true;
 
-    // 1. Cargar desde localStorage para disponibilidad instantánea
+    // Limpiar cualquier caché vieja de comentarios en localStorage
     try {
+        var keysToRemove = [];
         for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i);
-            if (k && k.indexOf('forta_comments_') === 0) {
-                var mId = k.replace('forta_comments_', '');
-                var stored = loadCommentsFromStorage(mId);
-                if (stored && stored.length) {
-                    fortaCommentsState.byMuni[String(mId)] = stored;
-                }
-            }
+            if (k && k.indexOf('forta_comments_') === 0) keysToRemove.push(k);
         }
+        keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
     } catch(e) {}
 
-    // 2. Carga inicial desde Firestore (comentarios ya guardados en la nube)
+    // 1. Carga inicial desde Firestore
     loadInitialCommentsFromFirestore();
 
-    // 3. Suscribirse a Firestore en tiempo real si está disponible
+    // 2. Suscribirse a Firestore en tiempo real si está disponible
     if (typeof window !== 'undefined' && window.firebaseFirestore) {
         try {
             fortaCommentsState.unsubscribe = window.firebaseFirestore
@@ -2070,13 +2049,12 @@ function initFortaComments() {
                         map[mId].push(c);
                     });
 
-                    // Fusionar con caché local (no borrar comentarios locales pendientes)
                     Object.keys(map).forEach(function(mId) {
-                        var existente = fortaCommentsState.byMuni[mId] || [];
-                        var combinados = mergeComments(existente, map[mId]);
-                        fortaCommentsState.byMuni[mId] = combinados;
-                        saveCommentsToStorage(mId, combinados);
+                        map[mId].sort(function(a, b) {
+                            return (b.timestamp || 0) - (a.timestamp || 0);
+                        });
                     });
+                    fortaCommentsState.byMuni = map;
 
                     // Actualizar orden de la lista principal e insignias
                     if (typeof applyFilters === 'function') {
