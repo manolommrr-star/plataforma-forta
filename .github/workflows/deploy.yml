@@ -58,13 +58,16 @@ jobs:
       - name: Verificar public/firebase-config.js generado
         run: cat public/firebase-config.js
 
+      - name: Verificar contenido de public/
+        run: ls -la public/
+
       # Configurar GitHub Pages
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      # Subir SOLO la carpeta public/ como artefacto de Pages
+      # Subir SOLO la carpeta public/ como artefacto de Pages (v4 usa upload-artifact@v4)
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./public
 
