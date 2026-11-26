@@ -15,10 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # ── Job 1: preparar archivos y subir artefacto ──────────────────────────────
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -55,23 +53,28 @@ jobs:
           }
           EOF
 
-      - name: Verificar public/firebase-config.js generado
+      - name: Verificar firebase-config.js generado
         run: cat public/firebase-config.js
 
-      - name: Verificar contenido de public/
+      - name: Listar archivos en public/
         run: ls -la public/
 
-      # Configurar GitHub Pages
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v4
 
-      # Subir SOLO la carpeta public/ como artefacto de Pages (v4 usa upload-artifact@v4)
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
-      # Desplegar el artefacto en GitHub Pages
+  # ── Job 2: desplegar el artefacto (separado para que Pages lo reconozca) ───
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
