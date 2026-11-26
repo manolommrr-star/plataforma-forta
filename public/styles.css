@@ -242,6 +242,44 @@
 .detail-grid .people-details, .detail-item + .people-details, .detail-section > .info-list + .detail-item.people-details {
   margin-top: 10px;
 }
+
+/* ── Separación interna dentro de una sección: gap entre subsecciones ── */
+.sec-contacts { margin-bottom: 10px; }
+.sec-info     { margin-top: 10px; }
+
+/* ── Diferenciación visual por sección ── */
+
+/* Votaciones — azul marino */
+.ds-votaciones {
+  border-left: 4px solid #1a56db;
+  background: linear-gradient(135deg, #f0f5ff 0%, #ffffff 100%);
+}
+.ds-votaciones h3 { color: #1a3a7a; }
+.ds-votaciones .sec-icon { background: #dbeafe; color: #1a56db; }
+
+/* Organización partidista — verde */
+.ds-org {
+  border-left: 4px solid #059669;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+}
+.ds-org h3 { color: #065f46; }
+.ds-org .sec-icon { background: #d1fae5; color: #059669; }
+
+/* Electoral — violeta */
+.ds-electoral {
+  border-left: 4px solid #7c3aed;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
+}
+.ds-electoral h3 { color: #4c1d95; }
+.ds-electoral .sec-icon { background: #ede9fe; color: #7c3aed; }
+
+/* Gobierno — ámbar/naranja */
+.ds-gobierno {
+  border-left: 4px solid #d97706;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+.ds-gobierno h3 { color: #92400e; }
+.ds-gobierno .sec-icon { background: #fef3c7; color: #d97706; }
 .comment-item.is-pending {
   background: #fffdf5;
   border-color: #fde68a;

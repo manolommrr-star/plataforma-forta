@@ -1065,14 +1065,11 @@ function openDetail(id, municipioObj, autoOpenComments) {
     html += '</div>';
     html += '</div>';
 
-    // 2) GRAFICAS: un pastel por votacion, una rebanada por partido en su color.
-    //    Van JUSTO TRAS el hero (nombre + estatus), que es lo mas importante,
-    //    a peticion. El % de cada partido es sobre el total de votos A PARTIDOS
-    //    del municipio (sin coaliciones, ni candidatos independientes, ni votos
-    //    nulos). Fuente: SEE. El total del pastel es data.total, no los votos
-    //    oficiales.
+    // ── SECCIÓN 1: VOTACIONES ──
+    // Pasteles de votos por partido (una rebanada por partido en su color).
+    // Fuente: SEE. El total del pastel es data.total (votos a partidos).
     var vp = m.votos_partidos || {};
-    html += '<div class="detail-section">';
+    html += '<div class="detail-section ds-votaciones">';
     html += '<h3><span class="sec-icon si-vote"><i data-lucide="pie-chart"></i></span>Votaciones · Votos por partido</h3>';
     html += '<div class="chart-hero pie-hero" data-pie-track>';
     ORDEN_VOTACIONES.forEach(function(et, i) {
@@ -1108,7 +1105,6 @@ function openDetail(id, municipioObj, autoOpenComments) {
         var safePhone = escapeHtml((phone || '').replace(/\s+/g, ''));
         var jsName = String(name || role).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var jsPhone = String(phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        // Icono y clase de color según el tipo de rol
         var roleLower = normText(role);
         var iconName, roleClass;
         if (roleLower.indexOf('presidente') >= 0) { iconName = 'user-round'; roleClass = 'role-presidente'; }
@@ -1132,39 +1128,8 @@ function openDetail(id, municipioObj, autoOpenComments) {
         out += '</div>';
         return out;
     }
-    var presTel0 = m.presidente_telefono || '';
-    var secTel0 = m.secretario_telefono || '';
 
-    // 2) CONTACTOS: tarjetas compactas con icono de rol
-    var totalContactos = 2 + (Array.isArray(m.sindicos) ? m.sindicos.length : 0) + (Array.isArray(m.regidores) ? m.regidores.length : 0);
-    html += '<div class="detail-section">';
-    html += '<h3 style="display:flex;align-items:center;gap:8px;">Dirigentes · Contactos <span style="font-size:12px;font-weight:600;background:var(--accent-light);color:var(--accent);border-radius:999px;padding:1px 9px;">' + totalContactos + '</span></h3>';
-    html += '<div class="contact-list">';
-    html += contactRow('Presidente de estructura', m.presidente_estructura || '', '', presTel0);
-    html += contactRow('Secretario general', m.secretario_general || '', '', secTel0);
-    if (Array.isArray(m.sindicos)) {
-        m.sindicos.forEach(function(s) {
-            var name = (typeof s === 'string') ? s : (s.nombre || s.name || '');
-            var phone = (typeof s === 'string') ? '' : (s.telefono || s.phone || '');
-            html += contactRow('Síndico', name, '', phone);
-        });
-    }
-    if (Array.isArray(m.regidores)) {
-        m.regidores.forEach(function(r) {
-            var name = (typeof r === 'string') ? r : (r.nombre || r.name || '');
-            var phone = (typeof r === 'string') ? '' : (r.telefono || r.phone || '');
-            var id = (typeof r === 'string') ? '' : (r.identificador || r.id || '');
-            html += contactRow('Regidor ' + (id ? id : ''), name, '', phone);
-        });
-    }
-    html += '</div></div>';
-
-    // (Las graficas de "Votos por partido" ya se pintan JUSTO TRAS el hero, al
-    // principio de la ficha — ver mas arriba. Aqui habia un segundo bloque
-    // duplicado que reusaba los mismos IDs de canvas pie-i-N y pisaba los
-    // pasteles; se elimino.)
-
-    // ── helper: fila de dato con icono (mismo estilo que contactos) ──
+    // ── helper: fila de dato con icono ──
     function infoRow(icon, iconCls, label, value, isBig, isFull) {
         var valCls = isBig ? 'big' : ((value === '' || value === '—' || value == null) ? 'dim' : '');
         var display = (value === null || value === undefined || value === '') ? '—' : value;
@@ -1184,8 +1149,33 @@ function openDetail(id, municipioObj, autoOpenComments) {
             + '</h3>';
     }
 
-    // ── SECCIÓN ELECTORAL ──
-    html += '<div class="detail-section">';
+    // ── SECCIÓN 2: ORGANIZACIÓN PARTIDISTA ──
+    // Orden: contactos dirigentes → info general → expandible consejeros
+    var vigenciaFmt = formatDate(m.vigencia);
+    var presTel0 = m.presidente_telefono || '';
+    var secTel0  = m.secretario_telefono || '';
+    var consejero = m.consejero_estatal || '';
+    html += '<div class="detail-section ds-org">';
+    html += secHeader('network', 'si-org', 'Organización partidista', null);
+    // 2a) Contactos: Presidente y Secretario
+    html += '<div class="contact-list sec-contacts">';
+    html += contactRow('Presidente de estructura', m.presidente_estructura || '', '', presTel0);
+    html += contactRow('Secretario general', m.secretario_general || '', '', secTel0);
+    html += '</div>';
+    // 2b) Info general
+    html += '<div class="info-list sec-info">';
+    html += infoRow('user-round-cog', 'ii-green', 'Coordinador de zona', nameCase(m.coordinador_zona) || null, false, true);
+    html += infoRow('shield-check', 'ii-blue', 'Estatus de estructura', est ? (est === 'SE' ? 'SE · Sin Estructura' : (estatusShort(est) !== String(est).trim() ? estatusShort(est) + ' · ' + est : est)) : null, false, true);
+    html += infoRow('calendar-check', 'ii-teal', 'Vigencia de la estructura', vigenciaFmt || null, false, true);
+    html += infoRow('target', 'ii-amber', 'Meta soldados dic (2026)', m.soldados != null ? formatNum(m.soldados) : null, m.soldados != null, true);
+    html += infoRow('users-round', 'ii-purple', 'Meta afiliados dic (2026)', m.meta_afiliados != null ? formatNum(m.meta_afiliados) : null, m.meta_afiliados != null, true);
+    html += '</div>';
+    // 2c) Expandible: Consejeros
+    if (consejero) html += detailPeopleList('Consejero estatal', consejero, 'badge-check');
+    html += '</div>';
+
+    // ── SECCIÓN 3: ELECTORAL ──
+    html += '<div class="detail-section ds-electoral">';
     html += secHeader('check-square', 'si-electoral', 'Electoral', null);
     html += '<div class="info-grid">';
     html += infoRow('users', 'ii-blue', 'Listado Nominal', formatNum(m.listado_nominal), true);
@@ -1198,33 +1188,45 @@ function openDetail(id, municipioObj, autoOpenComments) {
     html += infoRow('flag', 'ii-sky', 'Distrito Federal', m.distrito_federal || null, false, false);
     html += '</div></div>';
 
-    // ── SECCIÓN ORGANIZACIÓN PARTIDISTA ──
-    var vigenciaFmt = formatDate(m.vigencia);
-    html += '<div class="detail-section">';
-    html += secHeader('network', 'si-org', 'Organización partidista', null);
-    html += '<div class="info-list">';
-    html += infoRow('user-round-cog', 'ii-green', 'Coordinador de zona', nameCase(m.coordinador_zona) || null, false, true);
-    html += infoRow('shield-check', 'ii-blue', 'Estatus de estructura', est ? (est === 'SE' ? 'SE · Sin Estructura' : (estatusShort(est) !== String(est).trim() ? estatusShort(est) + ' · ' + est : est)) : null, false, true);
-    html += infoRow('calendar-check', 'ii-teal', 'Vigencia de la estructura', vigenciaFmt || null, false, true);
-    html += infoRow('target', 'ii-amber', 'Meta soldados dic (2026)', formatNum(m.soldados), m.soldados != null);
-    html += infoRow('users-round', 'ii-purple', 'Meta afiliados dic (2026)', formatNum(m.meta_afiliados), m.meta_afiliados != null);
-    html += '</div></div>';
-
-    // ── SECCIÓN GOBIERNO ──
+    // ── SECCIÓN 4: GOBIERNO ──
+    // Orden: contactos Síndico/Regidores → datos PP (diputados, presidente municipal)
     var ppFed = m.pp_diputado_federal || '';
     var ppLoc = m.pp_diputado_local || '';
     var ppPre = m.pp_presidente_municipal || '';
-    var ediles = m.regidores_pan || '';
-    var consejero = m.consejero_estatal || '';
-    if (ppFed || ppLoc || ppPre || ediles || consejero) {
-        html += '<div class="detail-section">';
+    var hasSindicos  = Array.isArray(m.sindicos)  && m.sindicos.length > 0;
+    var hasRegidores = Array.isArray(m.regidores) && m.regidores.length > 0;
+    var hasGobInfo   = ppFed || ppLoc || ppPre || hasSindicos || hasRegidores;
+    if (hasGobInfo) {
+        html += '<div class="detail-section ds-gobierno">';
         html += secHeader('gavel', 'si-gov', 'Gobierno', null);
-        html += '<div class="info-list">';
-        if (ppFed) html += infoRow('globe', 'ii-blue', '(PP) Diputado Federal', personParty(ppFed), false, true);
-        if (ppLoc) html += infoRow('landmark', 'ii-purple', '(PP) Diputado Local', personParty(ppLoc), false, true);
-        if (ppPre) html += infoRow('star', 'ii-amber', '(PP) Presidente Municipal', personParty(ppPre), false, true);
-        html += '</div>';
-        if (consejero) html += detailPeopleList('Consejero estatal', consejero, 'badge-check');
+        // 4a) Contactos: Síndico y Regidores
+        if (hasSindicos || hasRegidores) {
+            html += '<div class="contact-list sec-contacts">';
+            if (hasSindicos) {
+                m.sindicos.forEach(function(s) {
+                    var name  = (typeof s === 'string') ? s : (s.nombre || s.name || '');
+                    var phone = (typeof s === 'string') ? '' : (s.telefono || s.phone || '');
+                    html += contactRow('Síndico', name, '', phone);
+                });
+            }
+            if (hasRegidores) {
+                m.regidores.forEach(function(r) {
+                    var name  = (typeof r === 'string') ? r : (r.nombre || r.name || '');
+                    var phone = (typeof r === 'string') ? '' : (r.telefono || r.phone || '');
+                    var rid   = (typeof r === 'string') ? '' : (r.identificador || r.id || '');
+                    html += contactRow('Regidor' + (rid ? ' ' + rid : ''), name, '', phone);
+                });
+            }
+            html += '</div>';
+        }
+        // 4b) Datos PP
+        if (ppFed || ppLoc || ppPre) {
+            html += '<div class="info-list sec-info">';
+            if (ppFed) html += infoRow('globe',    'ii-blue',   '(PP) Diputado Federal',      personParty(ppFed), false, true);
+            if (ppLoc) html += infoRow('landmark', 'ii-purple', '(PP) Diputado Local',         personParty(ppLoc), false, true);
+            if (ppPre) html += infoRow('star',     'ii-amber',  '(PP) Presidente Municipal',   personParty(ppPre), false, true);
+            html += '</div>';
+        }
         html += '</div>';
     }
 
