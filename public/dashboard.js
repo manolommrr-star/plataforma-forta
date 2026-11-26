@@ -1611,9 +1611,28 @@ function buildAndOpenExport(filenameBase) {
     openExportSheet(blob, filename, filteredData.length, csvBlob);
 }
 
+function buildExportFilenameFromFilters() {
+    var parts = [];
+    ['distrito_local', 'distrito_federal', 'estatus_estructura', 'coordinador'].forEach(function(k) {
+        if (activeFilters[k] && activeFilters[k].size > 0) {
+            activeFilters[k].forEach(function(val) { parts.push(val); });
+        }
+    });
+    if (tableSearchTerm && tableSearchTerm.trim()) parts.push(tableSearchTerm.trim());
+    if (personSearchTerm && personSearchTerm.trim()) parts.push(personSearchTerm.trim());
+
+    if (!parts.length) return 'municipios_todos';
+
+    var slug = normText(parts.join('_'))
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+    return slug ? ('municipios_' + slug) : 'municipios_filtrados';
+}
+
 // Botón original (drawer de filtros): exporta lo filtrado.
 document.getElementById('export-excel-btn').addEventListener('click', function() {
-    buildAndOpenExport('municipios_filtrados');
+    buildAndOpenExport(buildExportFilenameFromFilters());
 });
 
 // Coordinador: su botón de filtros abre el MISMO menú de exportar
