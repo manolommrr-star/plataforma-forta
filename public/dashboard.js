@@ -1492,23 +1492,63 @@ document.getElementById('person-search').addEventListener('input', function(e) {
 // Construye el Excel/CSV de los datos visibles y abre el menú de exportar
 // (descargar, compartir .xlsx, compartir .csv por WhatsApp).
 // filenameBase: prefijo del archivo (ej. 'municipios_filtrados' o 'municipios_felipe_lopez').
+function formatContactArrayForExport(arr, prefix) {
+    if (!Array.isArray(arr) || !arr.length) return '';
+    return arr.map(function(item) {
+        if (typeof item === 'string') return nameCase(item);
+        var name = nameCase(item.nombre || item.name || '');
+        var phone = (item.telefono || item.phone || '').trim();
+        var id = (item.identificador || item.id || '').trim();
+        var label = prefix ? (prefix + (id ? ' ' + id : '') + ': ') : '';
+        return label + name + (phone ? ' (' + phone + ')' : '');
+    }).filter(Boolean).join(' | ');
+}
+
 function buildAndOpenExport(filenameBase) {
     if (!filteredData.length) { alert('No hay datos para exportar.'); return; }
-    var keys = Object.keys(filteredData[0]).filter(function(k) {
-        return ['metricas', 'etiquetas', 'metadata', 'votos_partidos', 'zona'].indexOf(k) === -1;
-    });
-    var headers = keys.map(fieldLabel);
+
+    // Columnas exactas que se muestran en las tarjetas municipales (en orden)
+    var columns = [
+        { header: 'N.º de municipio',        get: function(m) { return m['numero de municipio'] ?? ''; } },
+        { header: 'Municipio',               get: function(m) { return m.municipio || ''; } },
+        // Organización partidista
+        { header: 'Presidente de estructura', get: function(m) { return nameCase(m.presidente_estructura) || ''; } },
+        { header: 'Teléfono presidente',     get: function(m) { return m.presidente_telefono || ''; } },
+        { header: 'Secretario general',      get: function(m) { return nameCase(m.secretario_general) || ''; } },
+        { header: 'Teléfono secretario',     get: function(m) { return m.secretario_telefono || ''; } },
+        { header: 'Coordinador de zona',     get: function(m) { return nameCase(m.coordinador_zona) || ''; } },
+        { header: 'Estatus de estructura',   get: function(m) { return m.estatus_estructura || ''; } },
+        { header: 'Vigencia',                get: function(m) { return formatDate(m.vigencia) || ''; } },
+        { header: 'Meta soldados dic (2026)', get: function(m) { return m.soldados ?? ''; } },
+        { header: 'Meta afiliados dic (2026)', get: function(m) { return m.meta_afiliados ?? ''; } },
+        { header: 'Consejero estatal',       get: function(m) { return m.consejero_estatal || ''; } },
+        // Electoral
+        { header: 'Listado Nominal',         get: function(m) { return m.listado_nominal ?? ''; } },
+        { header: 'Secciones',               get: function(m) { return m.secciones ?? ''; } },
+        { header: 'Casillas',                get: function(m) { return m.casillas ?? ''; } },
+        { header: 'Rutas',                   get: function(m) { return m.rutas ?? ''; } },
+        { header: 'Total de Ediles',         get: function(m) { return m.total_ediles ?? ''; } },
+        { header: 'Militantes',              get: function(m) { return m.militantes ?? ''; } },
+        { header: 'Distrito Local',          get: function(m) { return m.distrito_local || ''; } },
+        { header: 'Distrito Federal',        get: function(m) { return m.distrito_federal || ''; } },
+        // Gobierno
+        { header: 'Síndico(s)',              get: function(m) { return formatContactArrayForExport(m.sindicos, ''); } },
+        { header: 'Regidor(es)',             get: function(m) { return formatContactArrayForExport(m.regidores, 'Regidor'); } },
+        { header: '(PP) Diputado Federal',   get: function(m) { return m.pp_diputado_federal ? personParty(m.pp_diputado_federal) : ''; } },
+        { header: '(PP) Diputado Local',     get: function(m) { return m.pp_diputado_local ? personParty(m.pp_diputado_local) : ''; } },
+        { header: '(PP) Presidente Municipal', get: function(m) { return m.pp_presidente_municipal ? personParty(m.pp_presidente_municipal) : ''; } },
+        // Votaciones (totales de votos a partidos de las gráficas)
+        { header: 'Votos 2025 (alcaldes)',   get: function(m) { return (m.votos_partidos && m.votos_partidos['2025 alcaldes']) ? m.votos_partidos['2025 alcaldes'].total : (m.votos_2025_alcaldes ?? ''); } },
+        { header: 'Votos 2024 (locales)',    get: function(m) { return (m.votos_partidos && m.votos_partidos['2024 locales']) ? m.votos_partidos['2024 locales'].total : (m.votos_2024_locales ?? ''); } },
+        { header: 'Votos 2024 (federales)',  get: function(m) { return (m.votos_partidos && m.votos_partidos['2024 federales']) ? m.votos_partidos['2024 federales'].total : (m.votos_2024_federales ?? ''); } }
+    ];
+
+    var headers = columns.map(function(c) { return c.header; });
     var rows = filteredData.map(function(m) {
         var row = {};
-        keys.forEach(function(h, i) {
-            var v = m[h];
-            if (h === 'pct_2024_locales' || h === 'pct_2024_federales' || h === 'pct_2025') {
-                var p = pctValue(v);
-                v = (p === null) ? '' : Math.round(p * 100) / 100;   // todo en % reales
-            } else if (h === 'vigencia' || h === 'secretario_fecha_nacimiento' || h === 'presidente_fecha_nacimiento') {
-                v = formatDate(v);
-            }
-            row[headers[i]] = (v === null || v === undefined) ? '' : v;
+        columns.forEach(function(c) {
+            var v = c.get(m);
+            row[c.header] = (v === null || v === undefined) ? '' : v;
         });
         return row;
     });
