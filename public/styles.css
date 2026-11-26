@@ -245,7 +245,7 @@
 
 /* ── Separación interna dentro de una sección: gap entre subsecciones ── */
 .sec-contacts { margin-bottom: 4px; }
-.sec-info     { margin-top: 2px; }
+.sec-info     { margin-top: 2px; margin-bottom: 4px; }
 
 /* ── Diferenciación visual por sección ── */
 
