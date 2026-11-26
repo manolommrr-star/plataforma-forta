@@ -1222,9 +1222,9 @@ function openDetail(id, municipioObj, autoOpenComments) {
         // 4b) Datos PP
         if (ppFed || ppLoc || ppPre) {
             html += '<div class="info-list sec-info">';
+            if (ppPre) html += infoRow('star',     'ii-amber',  '(PP) Presidente Municipal',   personParty(ppPre), false, true);
             if (ppFed) html += infoRow('globe',    'ii-blue',   '(PP) Diputado Federal',      personParty(ppFed), false, true);
             if (ppLoc) html += infoRow('landmark', 'ii-purple', '(PP) Diputado Local',         personParty(ppLoc), false, true);
-            if (ppPre) html += infoRow('star',     'ii-amber',  '(PP) Presidente Municipal',   personParty(ppPre), false, true);
             html += '</div>';
         }
         html += '</div>';
